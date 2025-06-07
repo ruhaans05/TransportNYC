@@ -10,11 +10,11 @@ GAS_PRICE = 2.972  # NYC MSA average June 2025
 MPG = 25
 DEFAULT_TRANSIT_FARE = 2.90
 
-# === Load Google API Key ===
+# === Load API Key ===
 load_dotenv()
 API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# === Nominatim Search (returns lat,lon for Google Directions) ===
+# === Nominatim search for autocomplete ===
 def get_place_suggestions(input_text):
     if not input_text or len(input_text) < 3:
         return []
@@ -41,6 +41,23 @@ def get_place_suggestions(input_text):
         }
         for item in res.json()
     ]
+
+# === Nominatim reverse geocoding ===
+def reverse_geocode_nominatim(latlon):
+    lat, lon = latlon.split(",")
+    url = "https://nominatim.openstreetmap.org/reverse"
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "format": "json"
+    }
+    headers = {
+        "User-Agent": "TransportNYC-App"
+    }
+    res = requests.get(url, params=params, headers=headers)
+    if res.status_code != 200:
+        return latlon
+    return res.json().get("display_name", latlon)
 
 # === Google Directions API ===
 def get_directions(start, end, mode):
@@ -128,15 +145,19 @@ if st.button("Compare Routes"):
         st.warning("Please enter and select both a starting point and a destination.")
     else:
         with st.spinner("Fetching route details..."):
-            drive = get_directions(origin, destination, "driving")
-            transit = get_directions(origin, destination, "transit")
+
+            origin_address = reverse_geocode_nominatim(origin)
+            destination_address = reverse_geocode_nominatim(destination)
+
+            drive = get_directions(origin_address, destination_address, "driving")
+            transit = get_directions(origin_address, destination_address, "transit")
 
             if not drive or not transit:
                 st.error("Failed to retrieve route data. Please try different locations.")
             else:
                 gas_used = drive['distance_miles'] / MPG
                 gas_cost = estimate_gas_cost(drive['distance_miles'])
-                toll_cost = estimate_tolls(origin, destination) if drive["toll_flag"] else 0
+                toll_cost = estimate_tolls(origin_address, destination_address) if drive["toll_flag"] else 0
                 drive_cost = gas_cost + toll_cost
                 transit_cost = transit["fare"] if transit["fare"] is not None else DEFAULT_TRANSIT_FARE
 
