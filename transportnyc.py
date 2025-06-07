@@ -4,7 +4,7 @@ import os
 import folium
 from streamlit_folium import st_folium
 
-GAS_PRICE = 3.80
+GAS_PRICE = 2.972
 MPG = 25
 DEFAULT_TRANSIT_FARE = 2.90
 
