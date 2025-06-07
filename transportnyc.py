@@ -71,8 +71,10 @@ def show_map(start_latlon, end_latlon):
     st_folium(m, width=700)
 
 # === UI ===
-st.set_page_config(page_title="NYC Route Efficiency", layout="centered")
-st.title("🚦 NYC Route Efficiency Optimizer")
+st.set_page_config(page_title="TransportNYC", layout="centered")
+st.title("🚦 TransportNYC")
+st.subheader("Optimize your routes for cost, gas, and time")
+
 
 col1, col2 = st.columns(2)
 with col1:
