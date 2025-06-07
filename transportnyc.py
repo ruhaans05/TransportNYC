@@ -14,7 +14,7 @@ DEFAULT_TRANSIT_FARE = 2.90
 load_dotenv()
 API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# === Nominatim (Free) for Autocomplete ===
+# === Nominatim Search (returns lat,lon for Google Directions) ===
 def get_place_suggestions(input_text):
     if not input_text or len(input_text) < 3:
         return []
@@ -34,7 +34,13 @@ def get_place_suggestions(input_text):
     if res.status_code != 200:
         return []
 
-    return [item["display_name"] for item in res.json()]
+    return [
+        {
+            "label": item["display_name"],
+            "value": f'{item["lat"]},{item["lon"]}'
+        }
+        for item in res.json()
+    ]
 
 # === Google Directions API ===
 def get_directions(start, end, mode):
@@ -98,22 +104,23 @@ st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 TransportNYC")
 st.subheader("Optimize your routes for cost, gas, and time")
 
-# === Inputs ===
 st.write("### 📍 Enter Your Route")
 
+origin_query = st.text_input("Starting Point (address, city, or landmark)")
 origin = None
-origin_query = st.text_input("Starting Point (address, city, landmark)")
 if len(origin_query) >= 3:
-    origin_suggestions = get_place_suggestions(origin_query)
-    if origin_suggestions:
-        origin = st.selectbox("Choose Starting Location", origin_suggestions)
+    origin_options = get_place_suggestions(origin_query)
+    if origin_options:
+        selected = st.selectbox("Choose Starting Location", origin_options, format_func=lambda x: x["label"])
+        origin = selected["value"]
 
+destination_query = st.text_input("Destination (address, city, or landmark)")
 destination = None
-destination_query = st.text_input("Destination (address, city, landmark)")
 if len(destination_query) >= 3:
-    destination_suggestions = get_place_suggestions(destination_query)
-    if destination_suggestions:
-        destination = st.selectbox("Choose Destination", destination_suggestions)
+    dest_options = get_place_suggestions(destination_query)
+    if dest_options:
+        selected = st.selectbox("Choose Destination", dest_options, format_func=lambda x: x["label"])
+        destination = selected["value"]
 
 # === Compare Button ===
 if st.button("Compare Routes"):
