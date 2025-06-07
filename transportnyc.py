@@ -73,43 +73,47 @@ def show_osrm_route(geometry, start_coords, end_coords):
     folium.Marker(location=end_coords, tooltip="End", icon=folium.Icon(color='red')).add_to(m)
     st_folium(m, width=700)
 
-# === UI ===
+# === UI Setup ===
 st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 TransportNYC")
 st.subheader("Optimize your routes for cost, gas, and time")
 
-st.write("### 📍 Enter Your Route")
+# === Session State Initialization ===
+if "origin_coords" not in st.session_state:
+    st.session_state.origin_coords = None
+if "dest_coords" not in st.session_state:
+    st.session_state.dest_coords = None
 
+# === Origin Input ===
 origin_query = st.text_input("Starting Point (address, city, or landmark)")
-origin = None
 if len(origin_query) >= 3:
     origin_options = get_place_suggestions(origin_query)
     if origin_options:
         selected = st.selectbox("Choose Starting Location", origin_options, format_func=lambda x: x["label"], key="origin")
-        origin = selected["value"]
+        st.session_state.origin_coords = selected["value"]
 
+# === Destination Input ===
 destination_query = st.text_input("Destination (address, city, or landmark)")
-destination = None
 if len(destination_query) >= 3:
     dest_options = get_place_suggestions(destination_query)
     if dest_options:
         selected = st.selectbox("Choose Destination", dest_options, format_func=lambda x: x["label"], key="dest")
-        destination = selected["value"]
+        st.session_state.dest_coords = selected["value"]
 
 # === Compare Button ===
 if st.button("Compare Routes"):
-    if not origin or not destination:
+    if not st.session_state.origin_coords or not st.session_state.dest_coords:
         st.warning("Please enter and select both a starting point and a destination.")
     else:
         with st.spinner("Fetching route details..."):
-            drive = get_directions_osrm(origin, destination)
+            drive = get_directions_osrm(st.session_state.origin_coords, st.session_state.dest_coords)
             if not drive:
                 st.error("Failed to retrieve route data. Please try different locations.")
             else:
                 gas_used = drive['distance_miles'] / MPG
                 gas_cost = estimate_gas_cost(drive['distance_miles'])
 
-                show_osrm_route(drive["geometry"], origin, destination)
+                show_osrm_route(drive["geometry"], st.session_state.origin_coords, st.session_state.dest_coords)
 
                 st.markdown("### 🧭 Route Summary")
                 st.subheader("🚗 Driving")
