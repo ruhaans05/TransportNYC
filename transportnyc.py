@@ -37,7 +37,7 @@ def get_place_suggestions(input_text):
     return [item["display_name"] for item in res.json()]
 
 # === Google Directions API ===
-def get_directions(start, end, mode, stop=None):
+def get_directions(start, end, mode):
     url = "https://maps.googleapis.com/maps/api/directions/json"
     params = {
         "origin": start,
@@ -48,8 +48,6 @@ def get_directions(start, end, mode, stop=None):
         "region": "us",
         "units": "imperial"
     }
-    if stop:
-        params["waypoints"] = stop
     if mode == "driving":
         params["traffic_model"] = "best_guess"
         params["avoid"] = "ferries"
@@ -100,7 +98,7 @@ st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 TransportNYC")
 st.subheader("Optimize your routes for cost, gas, and time")
 
-# === Inputs with Dynamic Autocomplete ===
+# === Inputs ===
 st.write("### 📍 Enter Your Route")
 
 origin = None
@@ -117,21 +115,14 @@ if len(destination_query) >= 3:
     if destination_suggestions:
         destination = st.selectbox("Choose Destination", destination_suggestions)
 
-stopover = None
-stop_query = st.text_input("Optional Stopover")
-if len(stop_query) >= 3:
-    stop_suggestions = get_place_suggestions(stop_query)
-    if stop_suggestions:
-        stopover = st.selectbox("Choose Stopover", stop_suggestions)
-
 # === Compare Button ===
 if st.button("Compare Routes"):
     if not origin or not destination:
         st.warning("Please enter and select both a starting point and a destination.")
     else:
         with st.spinner("Fetching route details..."):
-            drive = get_directions(origin, destination, "driving", stopover)
-            transit = get_directions(origin, destination, "transit", stopover)
+            drive = get_directions(origin, destination, "driving")
+            transit = get_directions(origin, destination, "transit")
 
             if not drive or not transit:
                 st.error("Failed to retrieve route data. Please try different locations.")
