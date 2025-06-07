@@ -3,15 +3,38 @@ import requests
 import os
 import folium
 from streamlit_folium import st_folium
-from dotenv import load_dotenv
-
-# === Load API Key ===
-load_dotenv()
-API_KEY = os.getenv("GOOGLE_API_KEY")
 
 GAS_PRICE = 3.80
 MPG = 25
 DEFAULT_TRANSIT_FARE = 2.90
+
+# === FREE Autocomplete with Nominatim ===
+def get_place_suggestions(input_text):
+    if not input_text or len(input_text) < 3:
+        return []
+
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {
+        "q": input_text,
+        "format": "json",
+        "addressdetails": 1,
+        "limit": 5
+    }
+    headers = {
+        "User-Agent": "TransportNYC-App"
+    }
+
+    res = requests.get(url, params=params, headers=headers)
+    if res.status_code != 200:
+        return []
+
+    results = res.json()
+    return [item["display_name"] for item in results]
+
+# === Directions (still uses Google, but only Directions API) ===
+from dotenv import load_dotenv
+load_dotenv()
+API_KEY = os.getenv("GOOGLE_API_KEY")
 
 def get_directions(start, end, mode, stop=None):
     url = "https://maps.googleapis.com/maps/api/directions/json"
@@ -75,15 +98,22 @@ st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 TransportNYC")
 st.subheader("Optimize your routes for cost, gas, and time")
 
+# === Autocomplete Inputs ===
+st.write("### 📍 Route Input")
 
-col1, col2 = st.columns(2)
-with col1:
-    origin = st.text_input("Starting Address", "Flushing, Queens, NY")
-with col2:
-    destination = st.text_input("Destination", "Columbus Circle, Manhattan, NY")
+origin_input = st.text_input("Start typing Starting Address", "Flushing, Queens, NY")
+origin_suggestions = get_place_suggestions(origin_input)
+origin = st.selectbox("Select Starting Address", origin_suggestions) if origin_suggestions else origin_input
 
-stopover = st.text_input("Optional Stopover (Leave blank if none)", "")
+destination_input = st.text_input("Start typing Destination Address", "Columbus Circle, Manhattan, NY")
+destination_suggestions = get_place_suggestions(destination_input)
+destination = st.selectbox("Select Destination", destination_suggestions) if destination_suggestions else destination_input
 
+stopover_input = st.text_input("Optional Stopover (Leave blank if none)", "")
+stopover_suggestions = get_place_suggestions(stopover_input)
+stopover = st.selectbox("Select Stopover", stopover_suggestions) if stopover_suggestions else stopover_input
+
+# === Compare Button ===
 if st.button("Compare Routes"):
     with st.spinner("Fetching data..."):
         drive = get_directions(origin, destination, "driving", stopover if stopover else None)
@@ -98,7 +128,6 @@ if st.button("Compare Routes"):
             drive_cost = gas_cost + toll_cost
             transit_cost = transit["fare"] if transit["fare"] is not None else DEFAULT_TRANSIT_FARE
 
-            # Map
             show_map(drive["start_location"], drive["end_location"])
 
             st.markdown("### 🧭 Route Summary")
