@@ -66,7 +66,7 @@ def show_osrm_route(geometry, start_coords, end_coords):
     folium.GeoJson(geometry).add_to(m)
     folium.Marker(start_coords, tooltip="Start", icon=folium.Icon(color="green")).add_to(m)
     folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
-    st_folium(m, width=700)
+    return m
 
 st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 TransportNYC")
@@ -101,16 +101,19 @@ if st.session_state.compare_clicked:
                 gas_used = drive['distance_miles'] / MPG
                 gas_cost = estimate_gas_cost(drive['distance_miles'])
 
-                show_osrm_route(drive["geometry"], st.session_state.origin_coords, st.session_state.dest_coords)
-
-                st.markdown("### 🧭 Route Summary")
-                st.subheader("🚗 Driving")
-                st.write(f"Time: {drive['duration_mins']:.1f} min")
-                st.write(f"Distance: {drive['distance_miles']:.2f} mi")
-                st.write(f"Gas Used: {gas_used:.2f} gal")
-                st.write(f"Gas Cost: ${gas_cost:.2f}")
-                st.markdown("---")
-                st.subheader("📊 Efficiency Results")
-                st.write(f"⏱ **Most Time Efficient:** Driving (only mode supported)")
-                st.write(f"💸 **Estimated Cost (Gas only):** ${gas_cost:.2f}")
-                st.write(f"⛽ **Gas Efficiency:** {gas_used:.2f} gallons used")
+                col1, col2 = st.columns([1.1, 1.4])
+                with col1:
+                    map_object = show_osrm_route(drive["geometry"], st.session_state.origin_coords, st.session_state.dest_coords)
+                    st_folium(map_object, width=350, height=300)
+                with col2:
+                    st.markdown("### 🧭 Route Summary")
+                    st.subheader("🚗 Driving")
+                    st.write(f"Time: {drive['duration_mins']:.1f} min")
+                    st.write(f"Distance: {drive['distance_miles']:.2f} mi")
+                    st.write(f"Gas Used: {gas_used:.2f} gal")
+                    st.write(f"Gas Cost: ${gas_cost:.2f}")
+                    st.markdown("---")
+                    st.subheader("📊 Efficiency Results")
+                    st.write(f"⏱ **Most Time Efficient:** Driving (only mode supported)")
+                    st.write(f"💸 **Estimated Cost (Gas only):** ${gas_cost:.2f}")
+                    st.write(f"⛽ **Gas Efficiency:** {gas_used:.2f} gallons used")
