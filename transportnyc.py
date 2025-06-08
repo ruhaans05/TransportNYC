@@ -6,6 +6,65 @@ from streamlit_folium import st_folium
 GAS_PRICE = 2.972  # NYC MSA average gas price (June 2025)
 MPG = 25
 
+# === Toll Estimator ===
+TOLL_ZONES = {
+    "GWB": {
+        "lat_min": 40.85,
+        "lat_max": 40.87,
+        "lon_min": -73.96,
+        "lon_max": -73.93,
+        "toll": 16.06
+    },
+    "HOLLAND_TUNNEL": {
+        "lat_min": 40.72,
+        "lat_max": 40.74,
+        "lon_min": -74.02,
+        "lon_max": -74.0,
+        "toll": 16.06
+    },
+    "LINCOLN_TUNNEL": {
+        "lat_min": 40.76,
+        "lat_max": 40.78,
+        "lon_min": -74.01,
+        "lon_max": -73.99,
+        "toll": 16.06
+    },
+    "VERRAZZANO": {
+        "lat_min": 40.6,
+        "lat_max": 40.62,
+        "lon_min": -74.05,
+        "lon_max": -74.02,
+        "toll": 6.94
+    },
+    "NJ_TPK": {
+        "lat_min": 40.65,
+        "lat_max": 40.85,
+        "lon_min": -74.3,
+        "lon_max": -74.1,
+        "toll": 7.0
+    },
+    "GSP": {
+        "lat_min": 40.4,
+        "lat_max": 40.9,
+        "lon_min": -74.3,
+        "lon_max": -74.0,
+        "toll": 2.0
+    }
+}
+
+def estimate_toll_from_geometry(geometry):
+    toll_total = 0.0
+    visited = set()
+    for coord in geometry['coordinates']:
+        lat, lon = coord[1], coord[0]
+        for zone, bounds in TOLL_ZONES.items():
+            if bounds["lat_min"] <= lat <= bounds["lat_max"] and bounds["lon_min"] <= lon <= bounds["lon_max"]:
+                if zone not in visited:
+                    toll_total += bounds["toll"]
+                    visited.add(zone)
+    return round(toll_total, 2)
+
+# === Streamlit Session Init ===
 if "origin_coords" not in st.session_state:
     st.session_state.origin_coords = None
 if "dest_coords" not in st.session_state:
@@ -13,6 +72,7 @@ if "dest_coords" not in st.session_state:
 if "compare_clicked" not in st.session_state:
     st.session_state.compare_clicked = False
 
+# === Helper Functions ===
 def get_place_suggestions(input_text):
     if not input_text or len(input_text) < 3:
         return []
@@ -68,6 +128,7 @@ def show_osrm_route(geometry, start_coords, end_coords):
     folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
     return m
 
+# === UI ===
 st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 TransportNYC")
 st.subheader("Optimize your routes for cost, gas, and time")
@@ -100,6 +161,8 @@ if st.session_state.compare_clicked:
             else:
                 gas_used = drive['distance_miles'] / MPG
                 gas_cost = estimate_gas_cost(drive['distance_miles'])
+                toll_cost = estimate_toll_from_geometry(drive["geometry"])
+                total_cost = gas_cost + toll_cost
 
                 col1, col2 = st.columns([1.1, 1.4])
                 with col1:
@@ -112,8 +175,10 @@ if st.session_state.compare_clicked:
                     st.write(f"Distance: {drive['distance_miles']:.2f} mi")
                     st.write(f"Gas Used: {gas_used:.2f} gal")
                     st.write(f"Gas Cost: ${gas_cost:.2f}")
+                    st.write(f"Toll Cost: ${toll_cost:.2f}")
+                    st.write(f"Total Estimated Cost: ${total_cost:.2f}")
                     st.markdown("---")
                     st.subheader("📊 Efficiency Results")
                     st.write(f"⏱ **Most Time Efficient:** Driving (only mode supported)")
-                    st.write(f"💸 **Estimated Cost (Gas only):** ${gas_cost:.2f}")
+                    st.write(f"💸 **Estimated Total Cost (Gas + Tolls):** ${total_cost:.2f}")
                     st.write(f"⛽ **Gas Efficiency:** {gas_used:.2f} gallons used")
