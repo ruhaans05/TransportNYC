@@ -46,15 +46,12 @@ def generate_route_description(geometry):
 
     for coord in geometry['coordinates']:
         lat, lon = coord[1], coord[0]
-
         if 40.5 <= lat <= 40.9 and -74.2 <= lon <= -73.7:
             urban_coords += 1
         else:
             rural_coords += 1
-
         if lat > 40.8 and lon < -74.0:
             hill_coords += 1
-
         if 40.7 < lat < 40.85 and -74.05 < lon < -73.95:
             enforcement_zone_hits += 1
 
@@ -88,13 +85,16 @@ def generate_route_description(geometry):
 def get_place_suggestions(input_text):
     if not input_text or len(input_text) < 3:
         return []
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {"q": input_text, "format": "json", "addressdetails": 1, "limit": 5}
-    headers = {"User-Agent": "TransportNYC-App"}
-    res = requests.get(url, params=params, headers=headers)
-    if res.status_code != 200:
+    try:
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {"q": input_text, "format": "json", "addressdetails": 1, "limit": 5}
+        headers = {"User-Agent": "TransportNYC-App"}
+        res = requests.get(url, params=params, headers=headers, timeout=5)
+        if res.status_code != 200:
+            return []
+        return [{"label": item["display_name"], "value": (float(item["lat"]), float(item["lon"]))} for item in res.json()]
+    except requests.exceptions.RequestException:
         return []
-    return [{"label": item["display_name"], "value": (float(item["lat"]), float(item["lon"]))} for item in res.json()]
 
 def get_directions_osrm(start_coords, end_coords):
     url = f"http://router.project-osrm.org/route/v1/driving/{start_coords[1]},{start_coords[0]};{end_coords[1]},{end_coords[0]}"
