@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import folium
 from streamlit_folium import st_folium
+import datetime
 
 GAS_PRICE = 2.972  # NYC MSA average gas price (June 2025)
 MPG = 25
@@ -28,15 +29,60 @@ def estimate_toll_from_geometry(geometry):
                     visited.add(zone)
     return round(toll_total, 2)
 
-# === Streamlit Session Init ===
-if "origin_coords" not in st.session_state:
-    st.session_state.origin_coords = None
-if "dest_coords" not in st.session_state:
-    st.session_state.dest_coords = None
-if "compare_clicked" not in st.session_state:
-    st.session_state.compare_clicked = False
+# === Weather Forecast ===
+def fetch_weather_forecast(lat, lon):
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": "temperature_2m,precipitation",
+        "current": "temperature_2m,precipitation",
+        "wind_speed_unit": "ms",
+        "temperature_unit": "fahrenheit",
+        "precipitation_unit": "inch",
+        "timezone": "auto"
+    }
+    res = requests.get(url, params=params, timeout=5)
+    return res.json() if res.status_code == 200 else None
 
-# === Route Description Logic ===
+def forecast_weather_along_route(geometry, total_minutes):
+    total_points = len(geometry["coordinates"])
+    checkpoints = [
+        ("Start", geometry["coordinates"][0], 0),
+        ("Midpoint", geometry["coordinates"][total_points // 2], total_minutes / 2),
+        ("End", geometry["coordinates"][-1], total_minutes)
+    ]
+    summaries = []
+    now = datetime.datetime.now()
+
+    for label, (lon, lat), minutes_from_now in checkpoints:
+        data = fetch_weather_forecast(lat, lon)
+        if not data or "hourly" not in data:
+            summaries.append(f"{label}: Weather data not available.")
+            continue
+
+        forecast_time = now + datetime.timedelta(minutes=minutes_from_now)
+        hourly_times = data["hourly"]["time"]
+        temperatures = data["hourly"]["temperature_2m"]
+        precipitation = data["hourly"]["precipitation"]
+
+        matched = None
+        for i, t in enumerate(hourly_times):
+            t_dt = datetime.datetime.fromisoformat(t)
+            if abs((t_dt - forecast_time).total_seconds()) < 1800:  # within 30 min
+                matched = (temperatures[i], precipitation[i])
+                break
+
+        if matched:
+            temp, precip = matched
+            condition = "🌧️ Rain" if precip > 0 else "☀️ Clear"
+            summaries.append(f"{label} (~{int(minutes_from_now)} min): {condition}, {round(temp)}°F")
+        else:
+            summaries.append(f"{label}: No close hourly data.")
+
+    return summaries
+
+# === Route Description ===
 def generate_route_description(geometry):
     description = []
     urban_coords = 0
@@ -81,7 +127,15 @@ def generate_route_description(geometry):
 
     return " ".join(description)
 
-# === Helper Functions ===
+# === Session State ===
+if "origin_coords" not in st.session_state:
+    st.session_state.origin_coords = None
+if "dest_coords" not in st.session_state:
+    st.session_state.dest_coords = None
+if "compare_clicked" not in st.session_state:
+    st.session_state.compare_clicked = False
+
+# === Place Search ===
 def get_place_suggestions(input_text):
     if not input_text or len(input_text) < 3:
         return []
@@ -96,6 +150,7 @@ def get_place_suggestions(input_text):
     except requests.exceptions.RequestException:
         return []
 
+# === OSRM ===
 def get_directions_osrm(start_coords, end_coords):
     url = f"http://router.project-osrm.org/route/v1/driving/{start_coords[1]},{start_coords[0]};{end_coords[1]},{end_coords[0]}"
     params = {"overview": "full", "geometries": "geojson", "alternatives": "false", "steps": "false"}
@@ -154,6 +209,7 @@ if st.session_state.compare_clicked:
                 toll_cost = estimate_toll_from_geometry(drive["geometry"])
                 total_cost = gas_cost + toll_cost
                 description = generate_route_description(drive["geometry"])
+                weather_summary = forecast_weather_along_route(drive["geometry"], drive["duration_mins"])
 
                 col1, col2 = st.columns([1.1, 1.4])
                 with col1:
@@ -176,3 +232,7 @@ if st.session_state.compare_clicked:
                     st.markdown("---")
                     st.subheader("📍 Route Description")
                     st.write(description)
+                    st.markdown("---")
+                    st.subheader("🌦️ Forecasted Weather Along Route")
+                    for entry in weather_summary:
+                        st.write(entry)
