@@ -8,48 +8,12 @@ MPG = 25
 
 # === Toll Estimator ===
 TOLL_ZONES = {
-    "GWB": {
-        "lat_min": 40.85,
-        "lat_max": 40.87,
-        "lon_min": -73.96,
-        "lon_max": -73.93,
-        "toll": 16.06
-    },
-    "HOLLAND_TUNNEL": {
-        "lat_min": 40.72,
-        "lat_max": 40.74,
-        "lon_min": -74.02,
-        "lon_max": -74.0,
-        "toll": 16.06
-    },
-    "LINCOLN_TUNNEL": {
-        "lat_min": 40.76,
-        "lat_max": 40.78,
-        "lon_min": -74.01,
-        "lon_max": -73.99,
-        "toll": 16.06
-    },
-    "VERRAZZANO": {
-        "lat_min": 40.6,
-        "lat_max": 40.62,
-        "lon_min": -74.05,
-        "lon_max": -74.02,
-        "toll": 6.94
-    },
-    "NJ_TPK": {
-        "lat_min": 40.65,
-        "lat_max": 40.85,
-        "lon_min": -74.3,
-        "lon_max": -74.1,
-        "toll": 7.0
-    },
-    "GSP": {
-        "lat_min": 40.4,
-        "lat_max": 40.9,
-        "lon_min": -74.3,
-        "lon_max": -74.0,
-        "toll": 2.0
-    }
+    "GWB": {"lat_min": 40.85, "lat_max": 40.87, "lon_min": -73.96, "lon_max": -73.93, "toll": 16.06},
+    "HOLLAND_TUNNEL": {"lat_min": 40.72, "lat_max": 40.74, "lon_min": -74.02, "lon_max": -74.0, "toll": 16.06},
+    "LINCOLN_TUNNEL": {"lat_min": 40.76, "lat_max": 40.78, "lon_min": -74.01, "lon_max": -73.99, "toll": 16.06},
+    "VERRAZZANO": {"lat_min": 40.6, "lat_max": 40.62, "lon_min": -74.05, "lon_max": -74.02, "toll": 6.94},
+    "NJ_TPK": {"lat_min": 40.65, "lat_max": 40.85, "lon_min": -74.3, "lon_max": -74.1, "toll": 7.0},
+    "GSP": {"lat_min": 40.4, "lat_max": 40.9, "lon_min": -74.3, "lon_max": -74.0, "toll": 2.0}
 }
 
 def estimate_toll_from_geometry(geometry):
@@ -72,37 +36,69 @@ if "dest_coords" not in st.session_state:
 if "compare_clicked" not in st.session_state:
     st.session_state.compare_clicked = False
 
+# === Route Description Logic ===
+def generate_route_description(geometry):
+    description = []
+    urban_coords = 0
+    rural_coords = 0
+    hill_coords = 0
+    enforcement_zone_hits = 0
+
+    for coord in geometry['coordinates']:
+        lat, lon = coord[1], coord[0]
+
+        if 40.5 <= lat <= 40.9 and -74.2 <= lon <= -73.7:
+            urban_coords += 1
+        else:
+            rural_coords += 1
+
+        if lat > 40.8 and lon < -74.0:
+            hill_coords += 1
+
+        if 40.7 < lat < 40.85 and -74.05 < lon < -73.95:
+            enforcement_zone_hits += 1
+
+    total = urban_coords + rural_coords
+    if total == 0:
+        return "No geographic context available."
+
+    urban_ratio = urban_coords / total
+    rural_ratio = rural_coords / total
+
+    if urban_ratio > 0.6:
+        description.append("🚦 This route is primarily urban, with heavy traffic likely during rush hours.")
+    elif rural_ratio > 0.6:
+        description.append("🌲 This route is mostly suburban or rural, with smoother traffic but higher speeds.")
+    else:
+        description.append("🛣️ This route mixes both city and suburban travel zones.")
+
+    if enforcement_zone_hits > 20:
+        description.append("🚓 Expect moderate to heavy police presence and enforcement along this path.")
+    else:
+        description.append("🆗 Minimal police enforcement zones detected along most of the route.")
+
+    if hill_coords > 10:
+        description.append("⛰️ Route crosses into hillier terrain—drive carefully during winter conditions.")
+    else:
+        description.append("🌇 Mostly flat terrain expected.")
+
+    return " ".join(description)
+
 # === Helper Functions ===
 def get_place_suggestions(input_text):
     if not input_text or len(input_text) < 3:
         return []
     url = "https://nominatim.openstreetmap.org/search"
-    params = {
-        "q": input_text,
-        "format": "json",
-        "addressdetails": 1,
-        "limit": 5
-    }
+    params = {"q": input_text, "format": "json", "addressdetails": 1, "limit": 5}
     headers = {"User-Agent": "TransportNYC-App"}
     res = requests.get(url, params=params, headers=headers)
     if res.status_code != 200:
         return []
-    return [
-        {
-            "label": item["display_name"],
-            "value": (float(item["lat"]), float(item["lon"]))
-        }
-        for item in res.json()
-    ]
+    return [{"label": item["display_name"], "value": (float(item["lat"]), float(item["lon"]))} for item in res.json()]
 
 def get_directions_osrm(start_coords, end_coords):
     url = f"http://router.project-osrm.org/route/v1/driving/{start_coords[1]},{start_coords[0]};{end_coords[1]},{end_coords[0]}"
-    params = {
-        "overview": "full",
-        "geometries": "geojson",
-        "alternatives": "false",
-        "steps": "false"
-    }
+    params = {"overview": "full", "geometries": "geojson", "alternatives": "false", "steps": "false"}
     response = requests.get(url, params=params)
     if response.status_code != 200:
         return None
@@ -110,19 +106,13 @@ def get_directions_osrm(start_coords, end_coords):
     if not data.get("routes"):
         return None
     route = data["routes"][0]
-    return {
-        "duration_mins": route["duration"] / 60,
-        "distance_miles": route["distance"] / 1609.34,
-        "geometry": route["geometry"]
-    }
+    return {"duration_mins": route["duration"] / 60, "distance_miles": route["distance"] / 1609.34, "geometry": route["geometry"]}
 
 def estimate_gas_cost(miles):
     return (miles / MPG) * GAS_PRICE
 
 def show_osrm_route(geometry, start_coords, end_coords):
-    m = folium.Map(location=[(start_coords[0] + end_coords[0]) / 2,
-                             (start_coords[1] + end_coords[1]) / 2],
-                   zoom_start=13)
+    m = folium.Map(location=[(start_coords[0] + end_coords[0]) / 2, (start_coords[1] + end_coords[1]) / 2], zoom_start=13)
     folium.GeoJson(geometry).add_to(m)
     folium.Marker(start_coords, tooltip="Start", icon=folium.Icon(color="green")).add_to(m)
     folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
@@ -163,6 +153,7 @@ if st.session_state.compare_clicked:
                 gas_cost = estimate_gas_cost(drive['distance_miles'])
                 toll_cost = estimate_toll_from_geometry(drive["geometry"])
                 total_cost = gas_cost + toll_cost
+                description = generate_route_description(drive["geometry"])
 
                 col1, col2 = st.columns([1.1, 1.4])
                 with col1:
@@ -182,3 +173,6 @@ if st.session_state.compare_clicked:
                     st.write(f"⏱ **Most Time Efficient:** Driving (only mode supported)")
                     st.write(f"💸 **Estimated Total Cost (Gas + Tolls):** ${total_cost:.2f}")
                     st.write(f"⛽ **Gas Efficiency:** {gas_used:.2f} gallons used")
+                    st.markdown("---")
+                    st.subheader("📍 Route Description")
+                    st.write(description)
