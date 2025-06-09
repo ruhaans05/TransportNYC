@@ -3,7 +3,7 @@ import requests
 import folium
 from streamlit_folium import st_folium
 
-GAS_PRICE = 2.972  # NYC MSA average gas price (June 2025)
+GAS_PRICE = 2.972
 MPG = 25
 
 # === Toll Estimator ===
@@ -35,7 +35,26 @@ def estimate_toll_from_geometry(geometry):
                     })
     return round(toll_total, 2), toll_events
 
-# === Session State ===
+def get_town_name(lat, lon):
+    try:
+        url = "https://nominatim.openstreetmap.org/reverse"
+        params = {
+            "lat": lat,
+            "lon": lon,
+            "format": "json",
+            "zoom": 10,
+            "addressdetails": 1
+        }
+        headers = {"User-Agent": "TransportNYC-App"}
+        res = requests.get(url, params=params, headers=headers, timeout=4)
+        if res.status_code == 200:
+            data = res.json()
+            return data["address"].get("town") or data["address"].get("city") or data["address"].get("village") or "Unknown area"
+    except:
+        pass
+    return "Unknown area"
+
+# === Streamlit State ===
 if "origin_coords" not in st.session_state:
     st.session_state.origin_coords = None
 if "dest_coords" not in st.session_state:
@@ -43,7 +62,43 @@ if "dest_coords" not in st.session_state:
 if "compare_clicked" not in st.session_state:
     st.session_state.compare_clicked = False
 
-# === Route Description ===
+# === Utilities ===
+def get_place_suggestions(input_text):
+    if not input_text or len(input_text) < 3:
+        return []
+    try:
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {"q": input_text, "format": "json", "addressdetails": 1, "limit": 5}
+        headers = {"User-Agent": "TransportNYC-App"}
+        res = requests.get(url, params=params, headers=headers, timeout=5)
+        if res.status_code != 200:
+            return []
+        return [{"label": item["display_name"], "value": (float(item["lat"]), float(item["lon"]))} for item in res.json()]
+    except:
+        return []
+
+def get_directions_osrm(start_coords, end_coords):
+    url = f"http://router.project-osrm.org/route/v1/driving/{start_coords[1]},{start_coords[0]};{end_coords[1]},{end_coords[0]}"
+    params = {"overview": "full", "geometries": "geojson", "alternatives": "false", "steps": "false"}
+    response = requests.get(url, params=params)
+    if response.status_code != 200:
+        return None
+    data = response.json()
+    if not data.get("routes"):
+        return None
+    route = data["routes"][0]
+    return {"duration_mins": route["duration"] / 60, "distance_miles": route["distance"] / 1609.34, "geometry": route["geometry"]}
+
+def estimate_gas_cost(miles):
+    return (miles / MPG) * GAS_PRICE
+
+def show_osrm_route(geometry, start_coords, end_coords):
+    m = folium.Map(location=[(start_coords[0] + end_coords[0]) / 2, (start_coords[1] + end_coords[1]) / 2], zoom_start=13)
+    folium.GeoJson(geometry).add_to(m)
+    folium.Marker(start_coords, tooltip="Start", icon=folium.Icon(color="green")).add_to(m)
+    folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
+    return m
+
 def generate_route_description(geometry):
     description = []
     urban_coords = 0
@@ -84,43 +139,6 @@ def generate_route_description(geometry):
         description.append("🌇 Mostly flat driving terrain.")
 
     return " ".join(description)
-
-# === Helper Functions ===
-def get_place_suggestions(input_text):
-    if not input_text or len(input_text) < 3:
-        return []
-    try:
-        url = "https://nominatim.openstreetmap.org/search"
-        params = {"q": input_text, "format": "json", "addressdetails": 1, "limit": 5}
-        headers = {"User-Agent": "TransportNYC-App"}
-        res = requests.get(url, params=params, headers=headers, timeout=5)
-        if res.status_code != 200:
-            return []
-        return [{"label": item["display_name"], "value": (float(item["lat"]), float(item["lon"]))} for item in res.json()]
-    except requests.exceptions.RequestException:
-        return []
-
-def get_directions_osrm(start_coords, end_coords):
-    url = f"http://router.project-osrm.org/route/v1/driving/{start_coords[1]},{start_coords[0]};{end_coords[1]},{end_coords[0]}"
-    params = {"overview": "full", "geometries": "geojson", "alternatives": "false", "steps": "false"}
-    response = requests.get(url, params=params)
-    if response.status_code != 200:
-        return None
-    data = response.json()
-    if not data.get("routes"):
-        return None
-    route = data["routes"][0]
-    return {"duration_mins": route["duration"] / 60, "distance_miles": route["distance"] / 1609.34, "geometry": route["geometry"]}
-
-def estimate_gas_cost(miles):
-    return (miles / MPG) * GAS_PRICE
-
-def show_osrm_route(geometry, start_coords, end_coords):
-    m = folium.Map(location=[(start_coords[0] + end_coords[0]) / 2, (start_coords[1] + end_coords[1]) / 2], zoom_start=13)
-    folium.GeoJson(geometry).add_to(m)
-    folium.Marker(start_coords, tooltip="Start", icon=folium.Icon(color="green")).add_to(m)
-    folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
-    return m
 
 # === UI ===
 st.set_page_config(page_title="TransportNYC", layout="centered")
@@ -179,7 +197,8 @@ if st.session_state.compare_clicked:
                             if toll["zone"] == "NJ_TPK":
                                 st.write(f"🛣️ {name} - Est. ${toll['amount']} (mileage-based system).")
                             else:
-                                st.write(f"🪙 {name} - ${toll['amount']} near ({toll['lat']}°N, {toll['lon']}°W)")
+                                town = get_town_name(toll["lat"], toll["lon"])
+                                st.write(f"🪙 {name} - ${toll['amount']} near **{town}**")
                     else:
                         st.write("💸 No toll zones detected along this route.")
                     st.markdown("---")
