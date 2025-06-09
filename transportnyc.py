@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import folium
 from streamlit_folium import st_folium
-import datetime
 
 GAS_PRICE = 2.972  # NYC MSA average gas price (June 2025)
 MPG = 25
@@ -20,6 +19,7 @@ TOLL_ZONES = {
 def estimate_toll_from_geometry(geometry):
     toll_total = 0.0
     visited = set()
+    toll_events = []
     for coord in geometry['coordinates']:
         lat, lon = coord[1], coord[0]
         for zone, bounds in TOLL_ZONES.items():
@@ -27,60 +27,21 @@ def estimate_toll_from_geometry(geometry):
                 if zone not in visited:
                     toll_total += bounds["toll"]
                     visited.add(zone)
-    return round(toll_total, 2)
+                    toll_events.append({
+                        "zone": zone,
+                        "lat": round(lat, 5),
+                        "lon": round(lon, 5),
+                        "amount": bounds["toll"]
+                    })
+    return round(toll_total, 2), toll_events
 
-# === Weather Forecast ===
-def fetch_weather_forecast(lat, lon):
-    url = "https://api.open-meteo.com/v1/forecast"
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "hourly": "temperature_2m,precipitation",
-        "current": "temperature_2m,precipitation",
-        "wind_speed_unit": "ms",
-        "temperature_unit": "fahrenheit",
-        "precipitation_unit": "inch",
-        "timezone": "auto"
-    }
-    res = requests.get(url, params=params, timeout=5)
-    return res.json() if res.status_code == 200 else None
-
-def forecast_weather_along_route(geometry, total_minutes):
-    total_points = len(geometry["coordinates"])
-    checkpoints = [
-        ("Start", geometry["coordinates"][0], 0),
-        ("Midpoint", geometry["coordinates"][total_points // 2], total_minutes / 2),
-        ("End", geometry["coordinates"][-1], total_minutes)
-    ]
-    summaries = []
-    now = datetime.datetime.now()
-
-    for label, (lon, lat), minutes_from_now in checkpoints:
-        data = fetch_weather_forecast(lat, lon)
-        if not data or "hourly" not in data:
-            summaries.append(f"{label}: Weather data not available.")
-            continue
-
-        forecast_time = now + datetime.timedelta(minutes=minutes_from_now)
-        hourly_times = data["hourly"]["time"]
-        temperatures = data["hourly"]["temperature_2m"]
-        precipitation = data["hourly"]["precipitation"]
-
-        matched = None
-        for i, t in enumerate(hourly_times):
-            t_dt = datetime.datetime.fromisoformat(t)
-            if abs((t_dt - forecast_time).total_seconds()) < 1800:  # within 30 min
-                matched = (temperatures[i], precipitation[i])
-                break
-
-        if matched:
-            temp, precip = matched
-            condition = "🌧️ Rain" if precip > 0 else "☀️ Clear"
-            summaries.append(f"{label} (~{int(minutes_from_now)} min): {condition}, {round(temp)}°F")
-        else:
-            summaries.append(f"{label}: No close hourly data.")
-
-    return summaries
+# === Session State ===
+if "origin_coords" not in st.session_state:
+    st.session_state.origin_coords = None
+if "dest_coords" not in st.session_state:
+    st.session_state.dest_coords = None
+if "compare_clicked" not in st.session_state:
+    st.session_state.compare_clicked = False
 
 # === Route Description ===
 def generate_route_description(geometry):
@@ -105,37 +66,26 @@ def generate_route_description(geometry):
     if total == 0:
         return "No geographic context available."
 
-    urban_ratio = urban_coords / total
-    rural_ratio = rural_coords / total
-
-    if urban_ratio > 0.6:
-        description.append("🚦 This route is primarily urban, with heavy traffic likely during rush hours.")
-    elif rural_ratio > 0.6:
-        description.append("🌲 This route is mostly suburban or rural, with smoother traffic but higher speeds.")
+    if urban_coords / total > 0.6:
+        description.append("🚦 Primarily urban route—expect traffic, especially during peak hours.")
+    elif rural_coords / total > 0.6:
+        description.append("🌲 Mostly rural/suburban—less traffic but faster speeds.")
     else:
-        description.append("🛣️ This route mixes both city and suburban travel zones.")
+        description.append("🛣️ Mix of urban and suburban travel zones.")
 
     if enforcement_zone_hits > 20:
-        description.append("🚓 Expect moderate to heavy police presence and enforcement along this path.")
+        description.append("🚓 Likely moderate to heavy police presence.")
     else:
-        description.append("🆗 Minimal police enforcement zones detected along most of the route.")
+        description.append("🆗 Minimal enforcement zones.")
 
     if hill_coords > 10:
-        description.append("⛰️ Route crosses into hillier terrain—drive carefully during winter conditions.")
+        description.append("⛰️ Hilly terrain ahead—watch for conditions.")
     else:
-        description.append("🌇 Mostly flat terrain expected.")
+        description.append("🌇 Mostly flat driving terrain.")
 
     return " ".join(description)
 
-# === Session State ===
-if "origin_coords" not in st.session_state:
-    st.session_state.origin_coords = None
-if "dest_coords" not in st.session_state:
-    st.session_state.dest_coords = None
-if "compare_clicked" not in st.session_state:
-    st.session_state.compare_clicked = False
-
-# === Place Search ===
+# === Helper Functions ===
 def get_place_suggestions(input_text):
     if not input_text or len(input_text) < 3:
         return []
@@ -150,7 +100,6 @@ def get_place_suggestions(input_text):
     except requests.exceptions.RequestException:
         return []
 
-# === OSRM ===
 def get_directions_osrm(start_coords, end_coords):
     url = f"http://router.project-osrm.org/route/v1/driving/{start_coords[1]},{start_coords[0]};{end_coords[1]},{end_coords[0]}"
     params = {"overview": "full", "geometries": "geojson", "alternatives": "false", "steps": "false"}
@@ -206,10 +155,9 @@ if st.session_state.compare_clicked:
             else:
                 gas_used = drive['distance_miles'] / MPG
                 gas_cost = estimate_gas_cost(drive['distance_miles'])
-                toll_cost = estimate_toll_from_geometry(drive["geometry"])
+                toll_cost, toll_events = estimate_toll_from_geometry(drive["geometry"])
                 total_cost = gas_cost + toll_cost
                 description = generate_route_description(drive["geometry"])
-                weather_summary = forecast_weather_along_route(drive["geometry"], drive["duration_mins"])
 
                 col1, col2 = st.columns([1.1, 1.4])
                 with col1:
@@ -224,6 +172,16 @@ if st.session_state.compare_clicked:
                     st.write(f"Gas Cost: ${gas_cost:.2f}")
                     st.write(f"Toll Cost: ${toll_cost:.2f}")
                     st.write(f"Total Estimated Cost: ${total_cost:.2f}")
+                    if toll_events:
+                        st.markdown("#### 🧾 Toll Payment Points")
+                        for toll in toll_events:
+                            name = toll["zone"].replace("_", " ").title()
+                            if toll["zone"] == "NJ_TPK":
+                                st.write(f"🛣️ {name} - Est. ${toll['amount']} (mileage-based system).")
+                            else:
+                                st.write(f"🪙 {name} - ${toll['amount']} near ({toll['lat']}°N, {toll['lon']}°W)")
+                    else:
+                        st.write("💸 No toll zones detected along this route.")
                     st.markdown("---")
                     st.subheader("📊 Efficiency Results")
                     st.write(f"⏱ **Most Time Efficient:** Driving (only mode supported)")
@@ -232,7 +190,3 @@ if st.session_state.compare_clicked:
                     st.markdown("---")
                     st.subheader("📍 Route Description")
                     st.write(description)
-                    st.markdown("---")
-                    st.subheader("🌦️ Forecasted Weather Along Route")
-                    for entry in weather_summary:
-                        st.write(entry)
