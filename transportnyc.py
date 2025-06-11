@@ -113,10 +113,8 @@ st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 TransportNYC")
 st.subheader("Optimize your routes for cost, gas, and time")
 
-if 'origin_coords' not in st.session_state:
-    st.session_state.origin_coords = None
-if 'dest_coords' not in st.session_state:
-    st.session_state.dest_coords = None
+if "run" not in st.session_state:
+    st.session_state.run = False
 
 origin_query = st.text_input("Starting Point", key="origin_input")
 destination_query = st.text_input("Destination", key="dest_input")
@@ -133,44 +131,48 @@ if destination_query and len(destination_query) >= 3:
         dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
         st.session_state.dest_coords = dest_coords
 
-if st.button("Compare Routes"):
-    if st.session_state.origin_coords and st.session_state.dest_coords:
-        with st.spinner("Fetching route and weather..."):
-            primary = get_directions_osrm(st.session_state.origin_coords, st.session_state.dest_coords)
-        if not primary:
-            st.error("Primary route failed.")
-        else:
-            gas_used = primary['distance_miles'] / MPG
-            gas_cost = estimate_gas_cost(primary['distance_miles'])
-            toll_cost, toll_events = estimate_toll_from_geometry(primary["geometry"])
-            total = gas_cost + toll_cost
+if st.button("Compare Route"):
+    st.session_state.run = True
 
-            col1, col2 = st.columns([1, 1.4])
-            with col1:
-                st_folium(show_map(primary["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300)
-            with col2:
-                st.markdown("### 🚗 Main Route")
-                st.write(f"Time: {primary['duration_mins']:.1f} min")
-                st.write(f"Distance: {primary['distance_miles']:.2f} mi")
-                st.write(f"Gas Used: {gas_used:.2f} gal")
-                st.write(f"Toll Cost: ${toll_cost:.2f}")
-                st.write(f"Total Cost: ${total:.2f}")
-                if toll_events:
-                    st.write("**Toll Points:**")
-                    for t in toll_events:
-                        place = get_town_name(t['lat'], t['lon'])
-                        name = t['zone'].replace("_", " ").title()
-                        st.write(f"• {name} in **{place}** (${t['amount']})")
-                else:
-                    st.write("✅ No tolls on this route.")
+if st.session_state.run and "origin_coords" in st.session_state and "dest_coords" in st.session_state:
+    origin_coords = st.session_state.origin_coords
+    dest_coords = st.session_state.dest_coords
 
-            st.markdown("### 🌦️ Forecast Along Route")
-            coords = primary["geometry"]["coordinates"]
-            sample_points = coords[::max(1, len(coords) // 5)]
-            for point in sample_points:
-                lat, lon = point[1], point[0]
-                weather = get_weather_forecast(lat, lon)
-                loc = get_town_name(lat, lon)
-                st.write(f"📍 {loc}: {weather}")
+    with st.spinner("Fetching route..."):
+        route = get_directions_osrm(origin_coords, dest_coords)
+
+    if not route:
+        st.error("Route failed.")
     else:
-        st.warning("Please select both a start and destination.")
+        gas_used = route['distance_miles'] / MPG
+        gas_cost = estimate_gas_cost(route['distance_miles'])
+        toll_cost, toll_events = estimate_toll_from_geometry(route["geometry"])
+        total = gas_cost + toll_cost
+
+        col1, col2 = st.columns([1, 1.4])
+        with col1:
+            st_folium(show_map(route["geometry"], origin_coords, dest_coords), width=400, height=300)
+        with col2:
+            st.markdown("### 🚗 Main Route")
+            st.write(f"Time: {route['duration_mins']:.1f} min")
+            st.write(f"Distance: {route['distance_miles']:.2f} mi")
+            st.write(f"Gas Used: {gas_used:.2f} gal")
+            st.write(f"Toll Cost: ${toll_cost:.2f}")
+            st.write(f"Total Cost: ${total:.2f}")
+            if toll_events:
+                st.write("**Toll Points:**")
+                for t in toll_events:
+                    place = get_town_name(t['lat'], t['lon'])
+                    name = t['zone'].replace("_", " ").title()
+                    st.write(f"• {name} in **{place}** (${t['amount']})")
+            else:
+                st.write("✅ No tolls on this route.")
+
+        st.markdown("### 🌦️ Forecast Along Route")
+        coords = route["geometry"]["coordinates"]
+        sample_points = coords[::max(1, len(coords) // 5)]
+        for point in sample_points:
+            lat, lon = point[1], point[0]
+            weather = get_weather_forecast(lat, lon)
+            loc = get_town_name(lat, lon)
+            st.write(f"📍 {loc}: {weather}")
