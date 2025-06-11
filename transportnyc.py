@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import folium
@@ -68,12 +67,12 @@ def get_weather_forecast(lat, lon):
         pass
     return "Weather unavailable"
 
-def get_directions_osrm(start_coords, end_coords):
+def get_directions_osrm(start_coords, end_coords, avoid_tolls=False):
     base = f"http://router.project-osrm.org/route/v1/driving/{start_coords[1]},{start_coords[0]};{end_coords[1]},{end_coords[0]}"
     params = {
         "overview": "full",
         "geometries": "geojson",
-        "alternatives": "false",
+        "alternatives": str(avoid_tolls).lower(),
         "steps": "false"
     }
     response = requests.get(base, params=params)
@@ -158,6 +157,7 @@ if st.button("Compare Routes"):
             else:
                 st.write("✅ No tolls on this route.")
 
+        # === Weather Forecast Summary ===
         st.markdown("### 🌦️ Forecast Along Route")
         coords = primary["geometry"]["coordinates"]
         sample_points = coords[::max(1, len(coords) // 5)]
@@ -166,3 +166,18 @@ if st.button("Compare Routes"):
             weather = get_weather_forecast(lat, lon)
             loc = get_town_name(lat, lon)
             st.write(f"📍 {loc}: {weather}")
+
+        # === Toll-Free Alternate ===
+        st.markdown("### 🛣 Toll-Free Alternate Route")
+        with st.spinner("Looking for toll-free route..."):
+            alt = get_directions_osrm(origin_coords, dest_coords, avoid_tolls=True)
+        if alt:
+            alt_gas = alt['distance_miles'] / MPG
+            alt_cost = estimate_gas_cost(alt['distance_miles'])
+            st.write(f"Time: {alt['duration_mins']:.1f} min")
+            st.write(f"Distance: {alt['distance_miles']:.2f} mi")
+            st.write(f"Gas Used: {alt_gas:.2f} gal")
+            st.write(f"Total Cost: ${alt_cost:.2f}")
+            st_folium(show_map(alt["geometry"], origin_coords, dest_coords), width=400, height=300)
+        else:
+            st.write("❌ No toll-free route found.")
