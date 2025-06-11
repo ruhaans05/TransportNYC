@@ -141,7 +141,7 @@ if destination_query and len(destination_query) >= 3:
 if st.button("Compare Routes"):
     with st.spinner("Fetching main route..."):
         st.session_state.primary = get_directions_osrm(st.session_state.origin_coords, st.session_state.dest_coords)
-        st.session_state.alt = None  # reset alt route if new search
+        st.session_state.alt = None  # reset alt if new route
 
 if st.session_state.primary:
     primary = st.session_state.primary
@@ -152,7 +152,7 @@ if st.session_state.primary:
 
     col1, col2 = st.columns([1, 1.4])
     with col1:
-        st_folium(show_map(primary["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300)
+        st_folium(show_map(primary["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300, key="main_map")
     with col2:
         st.markdown("### 🚗 Main Route")
         st.write(f"Time: {primary['duration_mins']:.1f} min")
@@ -169,7 +169,7 @@ if st.session_state.primary:
         else:
             st.write("✅ No tolls on this route.")
 
-    st.markdown("### 🌦️ Local Weather Along the Route")
+    st.markdown("### 🌦️ Weather Along Route")
     coords = primary["geometry"]["coordinates"]
     sample_points = coords[::max(1, len(coords) // 5)]
     for i, point in enumerate(sample_points):
@@ -191,6 +191,6 @@ if st.session_state.primary:
             st.write(f"Distance: {alt['distance_miles']:.2f} mi")
             st.write(f"Gas Used: {alt_gas:.2f} gal")
             st.write(f"Total Cost: ${alt_cost:.2f}")
-            st_folium(show_map(alt["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300)
+            st_folium(show_map(alt["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300, key="alt_map")
         else:
             st.write("❌ No toll-free route found.")
