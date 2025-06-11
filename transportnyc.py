@@ -120,17 +120,15 @@ if origin_query and len(origin_query) >= 3:
     origin_opts = get_place_suggestions(origin_query)
     if origin_opts:
         origin_coords = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")["value"]
-        st.session_state.origin_coords = origin_coords
 
 if destination_query and len(destination_query) >= 3:
     dest_opts = get_place_suggestions(destination_query)
     if dest_opts:
         dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
-        st.session_state.dest_coords = dest_coords
 
-if st.button("Compare Routes") and "origin_coords" in st.session_state and "dest_coords" in st.session_state:
+if st.button("Compare Routes"):
     with st.spinner("Fetching main route..."):
-        primary = get_directions_osrm(st.session_state.origin_coords, st.session_state.dest_coords)
+        primary = get_directions_osrm(origin_coords, dest_coords)
     if not primary:
         st.error("Primary route failed.")
     else:
@@ -141,7 +139,7 @@ if st.button("Compare Routes") and "origin_coords" in st.session_state and "dest
 
         col1, col2 = st.columns([1, 1.4])
         with col1:
-            st_folium(show_map(primary["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300)
+            st_folium(show_map(primary["geometry"], origin_coords, dest_coords), width=400, height=300)
         with col2:
             st.markdown("### 🚗 Main Route")
             st.write(f"Time: {primary['duration_mins']:.1f} min")
@@ -158,7 +156,6 @@ if st.button("Compare Routes") and "origin_coords" in st.session_state and "dest
             else:
                 st.write("✅ No tolls on this route.")
 
-        # === Weather Forecast Summary ===
         st.markdown("### 🌦️ Forecast Along Route")
         coords = primary["geometry"]["coordinates"]
         sample_points = coords[::max(1, len(coords) // 5)]
