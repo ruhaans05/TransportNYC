@@ -36,56 +36,46 @@ def estimate_toll_from_geometry(geometry):
 
 def get_town_name(lat, lon):
     try:
-        url = "https://nominatim.openstreetmap.org/reverse"
-        params = {"lat": lat, "lon": lon, "format": "json", "zoom": 10, "addressdetails": 1}
-        headers = {"User-Agent": "TransportNYC-App"}
-        res = requests.get(url, params=params, headers=headers, timeout=4)
+        res = requests.get("https://nominatim.openstreetmap.org/reverse", params={
+            "lat": lat, "lon": lon, "format": "json", "zoom": 10, "addressdetails": 1
+        }, headers={"User-Agent": "TransportNYC-App"}, timeout=4)
         if res.status_code == 200:
             data = res.json()
-            return data["address"].get("town") or data["address"].get("city") or data["address"].get("village") or "Unknown area"
+            return data["address"].get("town") or data["address"].get("city") or data["address"].get("village") or "Unknown"
     except:
-        pass
-    return "Unknown area"
+        return "Unknown"
+    return "Unknown"
 
 def get_weather_forecast(lat, lon):
     try:
-        url = "https://api.open-meteo.com/v1/forecast"
-        params = {
-            "latitude": lat,
-            "longitude": lon,
+        res = requests.get("https://api.open-meteo.com/v1/forecast", params={
+            "latitude": lat, "longitude": lon,
             "current": "temperature_2m,precipitation",
             "temperature_unit": "fahrenheit",
             "precipitation_unit": "inch"
-        }
-        res = requests.get(url, params=params, timeout=5)
+        }, timeout=5)
         if res.status_code == 200:
-            data = res.json()
-            temp = data["current"]["temperature_2m"]
-            precip = data["current"]["precipitation"]
-            return f"{temp}°F, {'Rainy' if precip > 0 else 'Clear'}"
+            current = res.json()["current"]
+            return f"{current['temperature_2m']}°F, {'Rainy' if current['precipitation'] > 0 else 'Clear'}"
     except:
-        pass
+        return "Weather unavailable"
     return "Weather unavailable"
 
 def get_directions_osrm(start_coords, end_coords):
-    base = f"http://router.project-osrm.org/route/v1/driving/{start_coords[1]},{start_coords[0]};{end_coords[1]},{end_coords[0]}"
-    params = {
+    res = requests.get(f"http://router.project-osrm.org/route/v1/driving/{start_coords[1]},{start_coords[0]};{end_coords[1]},{end_coords[0]}", params={
         "overview": "full",
         "geometries": "geojson",
+        "alternatives": "false",
         "steps": "false"
-    }
-    response = requests.get(base, params=params)
-    if response.status_code != 200:
-        return None
-    data = response.json()
-    if not data.get("routes"):
-        return None
-    route = data["routes"][0]
-    return {
-        "duration_mins": route["duration"] / 60,
-        "distance_miles": route["distance"] / 1609.34,
-        "geometry": route["geometry"]
-    }
+    })
+    if res.status_code == 200 and res.json().get("routes"):
+        route = res.json()["routes"][0]
+        return {
+            "duration_mins": route["duration"] / 60,
+            "distance_miles": route["distance"] / 1609.34,
+            "geometry": route["geometry"]
+        }
+    return None
 
 def estimate_gas_cost(miles):
     return (miles / MPG) * GAS_PRICE
@@ -100,21 +90,40 @@ def show_map(geometry, start_coords, end_coords):
 
 def get_place_suggestions(query):
     try:
-        url = "https://nominatim.openstreetmap.org/search"
-        params = {"q": query, "format": "json", "addressdetails": 1, "limit": 5}
-        headers = {"User-Agent": "TransportNYC-App"}
-        res = requests.get(url, params=params, headers=headers)
+        res = requests.get("https://nominatim.openstreetmap.org/search", params={
+            "q": query, "format": "json", "addressdetails": 1, "limit": 5
+        }, headers={"User-Agent": "TransportNYC-App"})
         return [{"label": i["display_name"], "value": (float(i["lat"]), float(i["lon"]))} for i in res.json()]
     except:
         return []
+
+def describe_route(geometry):
+    coords = geometry["coordinates"]
+    water_hits = 0
+    urban_hits = 0
+    for lon, lat in coords:
+        if -74.05 <= lon <= -73.95 and 40.5 <= lat <= 40.9:
+            urban_hits += 1
+        if any(abs(lat - b) < 0.01 for b in [40.6, 40.7, 40.85]):
+            water_hits += 1
+    total = len(coords)
+    summary = []
+    if urban_hits / total > 0.7:
+        summary.append("mostly urban")
+    elif urban_hits / total > 0.3:
+        summary.append("mixed urban/suburban")
+    else:
+        summary.append("mostly suburban/rural")
+    if water_hits > 2:
+        summary.append("crosses rivers or bridges")
+    if urban_hits / total > 0.6:
+        summary.append("possible traffic and aggressive drivers")
+    return ", ".join(summary).capitalize() + "."
 
 # === Streamlit UI ===
 st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 TransportNYC")
 st.subheader("Optimize your routes for cost, gas, and time")
-
-if "run" not in st.session_state:
-    st.session_state.run = False
 
 origin_query = st.text_input("Starting Point", key="origin_input")
 destination_query = st.text_input("Destination", key="dest_input")
@@ -122,57 +131,51 @@ destination_query = st.text_input("Destination", key="dest_input")
 if origin_query and len(origin_query) >= 3:
     origin_opts = get_place_suggestions(origin_query)
     if origin_opts:
-        origin_coords = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")["value"]
-        st.session_state.origin_coords = origin_coords
+        st.session_state.origin_coords = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")["value"]
 
 if destination_query and len(destination_query) >= 3:
     dest_opts = get_place_suggestions(destination_query)
     if dest_opts:
-        dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
-        st.session_state.dest_coords = dest_coords
+        st.session_state.dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
 
-if st.button("Compare Route"):
-    st.session_state.run = True
+if st.button("Compare Routes"):
+    st.session_state.run_triggered = True
 
-if st.session_state.run and "origin_coords" in st.session_state and "dest_coords" in st.session_state:
-    origin_coords = st.session_state.origin_coords
-    dest_coords = st.session_state.dest_coords
-
+if st.session_state.get("run_triggered") and st.session_state.get("origin_coords") and st.session_state.get("dest_coords"):
     with st.spinner("Fetching route..."):
-        route = get_directions_osrm(origin_coords, dest_coords)
+        primary = get_directions_osrm(st.session_state.origin_coords, st.session_state.dest_coords)
 
-    if not route:
-        st.error("Route failed.")
+    if not primary:
+        st.error("Route fetch failed.")
     else:
-        gas_used = route['distance_miles'] / MPG
-        gas_cost = estimate_gas_cost(route['distance_miles'])
-        toll_cost, toll_events = estimate_toll_from_geometry(route["geometry"])
+        gas_used = primary['distance_miles'] / MPG
+        gas_cost = estimate_gas_cost(primary['distance_miles'])
+        toll_cost, toll_events = estimate_toll_from_geometry(primary["geometry"])
         total = gas_cost + toll_cost
 
-        col1, col2 = st.columns([1, 1.4])
-        with col1:
-            st_folium(show_map(route["geometry"], origin_coords, dest_coords), width=400, height=300)
-        with col2:
-            st.markdown("### 🚗 Main Route")
-            st.write(f"Time: {route['duration_mins']:.1f} min")
-            st.write(f"Distance: {route['distance_miles']:.2f} mi")
-            st.write(f"Gas Used: {gas_used:.2f} gal")
-            st.write(f"Toll Cost: ${toll_cost:.2f}")
-            st.write(f"Total Cost: ${total:.2f}")
-            if toll_events:
-                st.write("**Toll Points:**")
-                for t in toll_events:
-                    place = get_town_name(t['lat'], t['lon'])
-                    name = t['zone'].replace("_", " ").title()
-                    st.write(f"• {name} in **{place}** (${t['amount']})")
-            else:
-                st.write("✅ No tolls on this route.")
+        st.markdown("### 🚗 Route Summary")
+        st.write(f"**Time:** {primary['duration_mins']:.1f} min")
+        st.write(f"**Distance:** {primary['distance_miles']:.2f} mi")
+        st.write(f"**Gas Used:** {gas_used:.2f} gal → ${gas_cost:.2f}")
+        st.write(f"**Toll Cost:** ${toll_cost:.2f}")
+        st.write(f"**Total Cost:** ${total:.2f}")
+        st.markdown(f"**Route Style:** {describe_route(primary['geometry'])}")
 
-        st.markdown("### 🌦️ Forecast Along Route")
-        coords = route["geometry"]["coordinates"]
-        sample_points = coords[::max(1, len(coords) // 5)]
-        for point in sample_points:
+        if toll_events:
+            st.write("**Toll Points:**")
+            for t in toll_events:
+                name = t['zone'].replace("_", " ").title()
+                town = get_town_name(t['lat'], t['lon'])
+                st.write(f"• {name} in **{town}** (${t['amount']})")
+        else:
+            st.write("✅ No tolls on this route.")
+
+        st.markdown("### 🌦️ Weather Forecast")
+        for point in primary["geometry"]["coordinates"][::max(1, len(primary["geometry"]["coordinates"]) // 5)]:
             lat, lon = point[1], point[0]
-            weather = get_weather_forecast(lat, lon)
-            loc = get_town_name(lat, lon)
-            st.write(f"📍 {loc}: {weather}")
+            town = get_town_name(lat, lon)
+            forecast = get_weather_forecast(lat, lon)
+            st.write(f"📍 {town}: {forecast}")
+
+        st.markdown("### 🗺 Route Map")
+        st_folium(show_map(primary["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=700, height=400)
