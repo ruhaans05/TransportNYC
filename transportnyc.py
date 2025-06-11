@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import folium
+import time
 from streamlit_folium import st_folium
 
 GAS_PRICE = 2.972
@@ -141,7 +142,7 @@ if destination_query and len(destination_query) >= 3:
 if st.button("Compare Routes"):
     with st.spinner("Fetching main route..."):
         st.session_state.primary = get_directions_osrm(st.session_state.origin_coords, st.session_state.dest_coords)
-        st.session_state.alt = None  # reset alt if new route
+        st.session_state.alt = None  # Reset alt route
 
 if st.session_state.primary:
     primary = st.session_state.primary
@@ -150,9 +151,13 @@ if st.session_state.primary:
     toll_cost, toll_events = estimate_toll_from_geometry(primary["geometry"])
     total = gas_cost + toll_cost
 
+    # Generate dynamic map keys
+    map_key_main = f"main_map_{int(time.time() * 1000)}"
+    map_key_alt = f"alt_map_{int(time.time() * 1000) + 1}"
+
     col1, col2 = st.columns([1, 1.4])
     with col1:
-        st_folium(show_map(primary["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300, key="main_map")
+        st_folium(show_map(primary["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300, key=map_key_main)
     with col2:
         st.markdown("### 🚗 Main Route")
         st.write(f"Time: {primary['duration_mins']:.1f} min")
@@ -191,6 +196,6 @@ if st.session_state.primary:
             st.write(f"Distance: {alt['distance_miles']:.2f} mi")
             st.write(f"Gas Used: {alt_gas:.2f} gal")
             st.write(f"Total Cost: ${alt_cost:.2f}")
-            st_folium(show_map(alt["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300, key="alt_map")
+            st_folium(show_map(alt["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300, key=map_key_alt)
         else:
             st.write("❌ No toll-free route found.")
