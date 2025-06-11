@@ -117,22 +117,33 @@ st.subheader("Optimize your routes for cost, gas, and time")
 origin_query = st.text_input("Starting Point", key="origin_input")
 destination_query = st.text_input("Destination", key="dest_input")
 
+if "origin_coords" not in st.session_state:
+    st.session_state.origin_coords = None
+if "dest_coords" not in st.session_state:
+    st.session_state.dest_coords = None
+if "primary_route" not in st.session_state:
+    st.session_state.primary_route = None
+if "alt_route" not in st.session_state:
+    st.session_state.alt_route = None
+
 if origin_query and len(origin_query) >= 3:
     origin_opts = get_place_suggestions(origin_query)
     if origin_opts:
         origin_coords = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")["value"]
+        st.session_state.origin_coords = origin_coords
 
 if destination_query and len(destination_query) >= 3:
     dest_opts = get_place_suggestions(destination_query)
     if dest_opts:
         dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
+        st.session_state.dest_coords = dest_coords
 
-if st.button("Compare Routes"):
+if st.button("Compare Routes") and st.session_state.origin_coords and st.session_state.dest_coords:
     with st.spinner("Fetching main route..."):
-        primary = get_directions_osrm(origin_coords, dest_coords)
-    if not primary:
-        st.error("Primary route failed.")
-    else:
+        st.session_state.primary_route = get_directions_osrm(st.session_state.origin_coords, st.session_state.dest_coords)
+
+    if st.session_state.primary_route:
+        primary = st.session_state.primary_route
         gas_used = primary['distance_miles'] / MPG
         gas_cost = estimate_gas_cost(primary['distance_miles'])
         toll_cost, toll_events = estimate_toll_from_geometry(primary["geometry"])
@@ -140,9 +151,12 @@ if st.button("Compare Routes"):
 
         col1, col2 = st.columns([1, 1.4])
         with col1:
-            st_folium(show_map(primary["geometry"], origin_coords, dest_coords), width=400, height=300)
+            st_folium(show_map(primary["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300)
         with col2:
             st.markdown("### 🚗 Main Route")
+            start_place = get_town_name(*st.session_state.origin_coords)
+            end_place = get_town_name(*st.session_state.dest_coords)
+            st.write(f"From **{start_place}** to **{end_place}**")
             st.write(f"Time: {primary['duration_mins']:.1f} min")
             st.write(f"Distance: {primary['distance_miles']:.2f} mi")
             st.write(f"Gas Used: {gas_used:.2f} gal")
@@ -157,7 +171,6 @@ if st.button("Compare Routes"):
             else:
                 st.write("✅ No tolls on this route.")
 
-        # === Weather Forecast Summary ===
         st.markdown("### 🌦️ Forecast Along Route")
         coords = primary["geometry"]["coordinates"]
         sample_points = coords[::max(1, len(coords) // 5)]
@@ -167,17 +180,18 @@ if st.button("Compare Routes"):
             loc = get_town_name(lat, lon)
             st.write(f"📍 {loc}: {weather}")
 
-        # === Toll-Free Alternate ===
-        st.markdown("### 🛣 Toll-Free Alternate Route")
-        with st.spinner("Looking for toll-free route..."):
-            alt = get_directions_osrm(origin_coords, dest_coords, avoid_tolls=True)
-        if alt:
-            alt_gas = alt['distance_miles'] / MPG
-            alt_cost = estimate_gas_cost(alt['distance_miles'])
-            st.write(f"Time: {alt['duration_mins']:.1f} min")
-            st.write(f"Distance: {alt['distance_miles']:.2f} mi")
-            st.write(f"Gas Used: {alt_gas:.2f} gal")
-            st.write(f"Total Cost: ${alt_cost:.2f}")
-            st_folium(show_map(alt["geometry"], origin_coords, dest_coords), width=400, height=300)
-        else:
-            st.write("❌ No toll-free route found.")
+        if toll_cost > 0:
+            st.markdown("### 🛣 Toll-Free Alternate Route")
+            with st.spinner("Looking for toll-free route..."):
+                st.session_state.alt_route = get_directions_osrm(st.session_state.origin_coords, st.session_state.dest_coords, avoid_tolls=True)
+            if st.session_state.alt_route:
+                alt = st.session_state.alt_route
+                alt_gas = alt['distance_miles'] / MPG
+                alt_cost = estimate_gas_cost(alt['distance_miles'])
+                st.write(f"Time: {alt['duration_mins']:.1f} min")
+                st.write(f"Distance: {alt['distance_miles']:.2f} mi")
+                st.write(f"Gas Used: {alt_gas:.2f} gal")
+                st.write(f"Total Cost: ${alt_cost:.2f}")
+                st_folium(show_map(alt["geometry"], st.session_state.origin_coords, st.session_state.dest_coords), width=400, height=300)
+            else:
+                st.write("❌ No toll-free route found.")
