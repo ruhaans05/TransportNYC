@@ -3,9 +3,7 @@ import os
 import json
 from datetime import datetime
 import hashlib
-import openai
 
-# ========== USER & CHAT MANAGEMENT ==========
 USERS_FILE = "users.json"
 CHAT_FILE = "chat.json"
 
@@ -78,6 +76,7 @@ if not st.session_state.username:
                 st.sidebar.success(f"Account created! Logged in as {username_input}")
             else:
                 st.sidebar.error("Username taken, invalid, or password missing.")
+
 else:
     st.sidebar.markdown(f"**Logged in as `{st.session_state.username}`**")
     if st.sidebar.button("Logout"):
@@ -121,6 +120,7 @@ if st.session_state.username and st.sidebar.button("Send"):
             })
             save_json(CHAT_FILE, chat_log)
 
+# ---- Chat Display ----
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🗣 Chat Log")
 
@@ -143,8 +143,46 @@ if st.session_state.username:
 else:
     st.sidebar.info("Reload to login and chat!")
 
-# ========== ROUTE PLANNING BELOW ==========
+# --------- (Rest of your app goes below, e.g., route planner etc.) ----------
 
+# --------- (Rest of your app below) ----------
+
+
+
+
+
+
+# --------- (Rest of your app goes below, e.g., route planner etc.) ----------
+
+import openai
+
+def ask_hustlerai(question, context=None):
+    """
+    Wraps OpenAI GPT-3.5/4 chat completion with system prompt for route assistant.
+    Optionally pass 'context' string about the user's planned route.
+    """
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+    system = "You are HustlerAI, a friendly and knowledgeable NYC transportation assistant. Answer user questions clearly and accurately. You know about driving, flights, gas prices, travel time, and trip planning."
+    if context:
+        system += f" The current route or plan context is: {context}"
+    try:
+        resp = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # Change to gpt-4 if desired and available
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": question}
+            ],
+            max_tokens=500,
+            temperature=0.25
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        return f"Error from HustlerAI: {e}"
+
+# --------- (Rest of your app goes below, e.g., route planner etc.) ----------
+
+
+import streamlit as st
 import requests
 import folium
 from streamlit_folium import st_folium
@@ -183,6 +221,7 @@ def show_map_with_route(start_coords, end_coords, polyline_str, steps, label):
     folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
     points = pl.decode(polyline_str)
     folium.PolyLine(points, color="blue", weight=5, opacity=0.7).add_to(m)
+
     highways = extract_highways_from_steps(steps)
     if highways:
         folium.Marker(
@@ -316,25 +355,6 @@ if st.session_state.run_triggered and origin_coords and dest_coords:
             label = "Approx. Gas Cost" if "Drive" in mode else "Fare"
             st.write(f"**{label}:** ${cost:.2f}")
 
-        # --- HUSTLER AI IMMEDIATELY AFTER RESULTS ---
-        st.markdown("---")
-        if st.session_state.get("username"):
-            with st.expander("🤖 HustlerAI — Ask Route or Travel Questions to our AI Companion!", expanded=True):
-                st.markdown("\nAsk specific questions about your route, costs, flight availabities and more!")
-                # Gather context string for current planned route (if you want smarter answers)
-                context = ""
-                if "origin_coords" in st.session_state and "dest_coords" in st.session_state:
-                    context = f"Origin: {st.session_state.origin_coords}, Destination: {st.session_state.dest_coords}."
-                user_ai_q = st.text_input("Enter a prompt:", key="hustlerai_input")
-                if st.button("Ask HustlerAI", key="hustlerai_btn") and user_ai_q.strip():
-                    with st.spinner("HustlerAI is thinking..."):
-                        ai_reply = ask_hustlerai(user_ai_q, context)
-                        st.markdown(f"**HustlerAI:** {ai_reply}")
-        else:
-            with st.expander("🤖 HustlerAI — Ask Route or Travel Questions", expanded=True):
-                st.info("Log in to use HustlerAI!")
-
-        # --- THEN SHOW MAPS ---
         st.markdown("### 🗺 Route Maps")
         cols = st.columns(2 if (tolled_route and nontolled_route) else 1)
 
@@ -355,3 +375,21 @@ if st.session_state.run_triggered and origin_coords and dest_coords:
                     nontolled_route["polyline"], nontolled_route["steps"], "No Tolls"
                 )
                 st_folium(map_nontolled, width=700, height=400)
+
+# --- HustlerAI Toolbar on the right ---
+
+if st.session_state.get("username"):
+    with st.expander("🤖 HustlerAI — Ask Route or Travel Questions to our AI Companion!", expanded=True):
+        st.markdown("\nAsk specific questions about your route, costs, flight availabities and more!")
+        # Gather context string for current planned route (if you want smarter answers)
+        context = ""
+        if "origin_coords" in st.session_state and "dest_coords" in st.session_state:
+            context = f"Origin: {st.session_state.origin_coords}, Destination: {st.session_state.dest_coords}."
+        user_ai_q = st.text_input("Enter a prompt:", key="hustlerai_input")
+        if st.button("Ask HustlerAI", key="hustlerai_btn") and user_ai_q.strip():
+            with st.spinner("HustlerAI is thinking..."):
+                ai_reply = ask_hustlerai(user_ai_q, context)
+                st.markdown(f"**HustlerAI:** {ai_reply}")
+else:
+    with st.expander("🤖 HustlerAI — Ask Route or Travel Questions", expanded=True):
+        st.info("Log in to use HustlerAI!")
