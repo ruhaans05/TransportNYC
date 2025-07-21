@@ -44,7 +44,7 @@ if "run_triggered" not in st.session_state:
     st.session_state.run_triggered = False
 
 st.set_page_config(page_title="TransportNYC", layout="centered")
-st.title("🚦 TransportNYC")
+st.title("🚦 Hustler")
 st.subheader("Optimize your routes for cost, gas, and time")
 
 origin_query = st.text_input("Starting Point", key="origin_input")
