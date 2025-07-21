@@ -1,15 +1,11 @@
 import streamlit as st
 import os
 import json
-import hashlib
 from datetime import datetime
+import hashlib
 
 USERS_FILE = "users.json"
 CHAT_FILE = "chat.json"
-
-def hash_pw(password):
-    # SHA-256 is fine for demo (not for production)
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 def load_json(filename, default):
     if os.path.exists(filename):
@@ -21,8 +17,21 @@ def save_json(filename, obj):
     with open(filename, "w") as f:
         json.dump(obj, f, indent=2)
 
-def get_user_obj(username, users):
-    for user in users:
+def hash_pw(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+users = load_json(USERS_FILE, [])
+chat_log = load_json(CHAT_FILE, [])
+
+# --- MIGRATION: Convert old user list to dict format ---
+if users and isinstance(users[0], str):
+    users = [{"username": u, "password": ""} for u in users]
+    save_json(USERS_FILE, users)
+
+def get_user_obj(username, users_list=None):
+    if users_list is None:
+        users_list = users
+    for user in users_list:
         if user["username"] == username:
             return user
     return None
@@ -31,22 +40,17 @@ def register_user(username, password):
     username = username.strip()
     if not username or not password:
         return False
-    users = load_json(USERS_FILE, [])
-    if get_user_obj(username, users):
+    if get_user_obj(username):
         return False
     users.append({"username": username, "password": hash_pw(password)})
     save_json(USERS_FILE, users)
     return True
 
 def authenticate(username, password):
-    users = load_json(USERS_FILE, [])
-    user = get_user_obj(username.strip(), users)
-    if not user:
-        return False
-    return user["password"] == hash_pw(password)
-
-users = load_json(USERS_FILE, [])
-chat_log = load_json(CHAT_FILE, [])
+    user = get_user_obj(username)
+    if user and user["password"] == hash_pw(password):
+        return True
+    return False
 
 # ---- Sidebar: Login / Create User ----
 st.sidebar.title("🧑‍💼 Login or Create Account")
@@ -64,14 +68,14 @@ if not st.session_state.username:
                 st.session_state.username = username_input.strip()
                 st.sidebar.success(f"Logged in as {username_input}")
             else:
-                st.sidebar.error("Invalid username or password.")
+                st.sidebar.error("Login failed. Invalid username or password.")
     else:  # Create Account
         if st.sidebar.button("Create Account"):
             if register_user(username_input, password_input):
                 st.session_state.username = username_input.strip()
                 st.sidebar.success(f"Account created! Logged in as {username_input}")
             else:
-                st.sidebar.error("Username taken, invalid, or missing password.")
+                st.sidebar.error("Username taken, invalid, or password missing.")
 
 else:
     st.sidebar.markdown(f"**Logged in as `{st.session_state.username}`**")
@@ -80,16 +84,13 @@ else:
 
 # ---- Chat Section ----
 st.sidebar.header("💬 Global & Private Chat")
+
 msg = st.sidebar.text_input(
     "Send a message (prefix with @username for private):",
     key="msg_input"
 )
 
-def all_usernames(users):
-    return [user["username"] for user in users]
-
 if st.session_state.username and st.sidebar.button("Send"):
-    users = load_json(USERS_FILE, [])
     msg = msg.strip()
     if msg:
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -98,7 +99,7 @@ if st.session_state.username and st.sidebar.button("Send"):
             split_idx = msg.find(" ")
             target = msg[1:split_idx]
             content = msg[split_idx+1:]
-            if target in all_usernames(users):
+            if get_user_obj(target):
                 chat_log.append({
                     "type": "private",
                     "from": st.session_state.username,
@@ -126,7 +127,10 @@ st.sidebar.markdown("### 🗣 Chat Log")
 if st.session_state.username:
     for chat in chat_log[-100:][::-1]:  # last 100 messages, newest on top
         if chat["type"] == "global":
-            st.sidebar.markdown(f"**{chat['from']}** <span style='color:gray;font-size:10px'>{chat['dt']}</span><br>{chat['msg']}", unsafe_allow_html=True)
+            st.sidebar.markdown(
+                f"**{chat['from']}** <span style='color:gray;font-size:10px'>{chat['dt']}</span><br>{chat['msg']}",
+                unsafe_allow_html=True
+            )
         elif chat["type"] == "private":
             # Show if you are sender or recipient
             if chat["to"] == st.session_state.username or chat["from"] == st.session_state.username:
@@ -138,6 +142,8 @@ if st.session_state.username:
                 )
 else:
     st.sidebar.info("Login to chat!")
+
+# --------- (Rest of your app goes below, e.g., route planner etc.) ----------
 
 # --------- (Rest of your app below) ----------
 
