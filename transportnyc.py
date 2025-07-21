@@ -61,7 +61,7 @@ st.title("🚦 Hustler")
 st.subheader("Optimize your routes for cost, gas, and time")
 
 # MPG prompt is now above entry points
-mpg_input = st.text_input("Optional: Enter your car's MPG (miles per gallon)", value="")
+mpg_input = st.text_input("Optional: Enter your vehicle's gallon count:", value="")
 try:
     mpg_val = float(mpg_input)
     if mpg_val <= 0:
