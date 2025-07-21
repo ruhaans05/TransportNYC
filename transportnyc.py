@@ -9,10 +9,9 @@ from google_maps import get_driving_route
 from flight_data import get_flights
 
 GAS_PRICE = 3.140
-MPG = 22.5
 
-def estimate_gas_cost(miles):
-    return round((miles / MPG) * GAS_PRICE, 2)
+def estimate_gas_cost(miles, mpg):
+    return round((miles / mpg) * GAS_PRICE, 2)
 
 def get_place_suggestions(query):
     try:
@@ -61,6 +60,14 @@ st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 Hustler")
 st.subheader("Optimize your routes for cost, gas, and time")
 
+mpg_input = st.text_input("Optional: Enter your car's MPG (miles per gallon)", value="")
+try:
+    mpg_val = float(mpg_input)
+    if mpg_val <= 0:
+        raise ValueError
+except:
+    mpg_val = 22  # Default if blank/invalid
+
 origin_query = st.text_input("Starting Point", key="origin_input")
 destination_query = st.text_input("Destination", key="dest_input")
 
@@ -95,13 +102,13 @@ if st.session_state.run_triggered and st.session_state.origin_coords and st.sess
         if "Drive (with tolls)" in transport_modes:
             tolled_route = get_driving_route(format_coords(origin), format_coords(destination), avoid_tolls=False)
             if tolled_route:
-                gas_cost = estimate_gas_cost(tolled_route["distance_miles"])
+                gas_cost = estimate_gas_cost(tolled_route["distance_miles"], mpg_val)
                 results.append(("Drive (with tolls)", tolled_route["duration_mins"], tolled_route["distance_miles"], gas_cost))
 
         if "Drive (no tolls)" in transport_modes:
             nontolled_route = get_driving_route(format_coords(origin), format_coords(destination), avoid_tolls=True)
             if nontolled_route:
-                gas_cost = estimate_gas_cost(nontolled_route["distance_miles"])
+                gas_cost = estimate_gas_cost(nontolled_route["distance_miles"], mpg_val)
                 results.append(("Drive (no tolls)", nontolled_route["duration_mins"], nontolled_route["distance_miles"], gas_cost))
 
         if "Flight" in transport_modes:
