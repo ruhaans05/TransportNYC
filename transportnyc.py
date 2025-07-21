@@ -337,7 +337,7 @@ with main_col:
 
 # ================= RIGHT TOOLBAR: HustlerAI =========================
 with ai_col:
-    st.markdown("## 🤖 HustlerAI\nAsk any route/travel/NYC question to your AI Companion!")
+    st.markdown("## 🤖 HustlerAI\nAsk any route/travel questions to our AI Companion!")
     import openai
     def ask_hustlerai(question, context=None):
         openai.api_key = st.secrets["OPENAI_API_KEY"]
