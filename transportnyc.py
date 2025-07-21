@@ -178,18 +178,18 @@ with main_col:
         return list(set(highways))[:6]
 
     def show_map_with_route(start_coords, end_coords, polyline_str, steps, label):
-        m = .Map(location=[(start_coords[0] + end_coords[0]) / 2,
+        m = folium.Map(location=[(start_coords[0] + end_coords[0]) / 2,
                                  (start_coords[1] + end_coords[1]) / 2], zoom_start=11)
-        .Marker(start_coords, tooltip="Start", icon=.Icon(color="green")).add_to(m)
-        .Marker(end_coords, tooltip="End", icon=.Icon(color="red")).add_to(m)
+        folium.Marker(start_coords, tooltip="Start", icon=folium.Icon(color="green")).add_to(m)
+        folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
         points = pl.decode(polyline_str)
-        .PolyLine(points, color="blue", weight=5, opacity=0.7).add_to(m)
+        folium.PolyLine(points, color="blue", weight=5, opacity=0.7).add_to(m)
 
         highways = extract_highways_from_steps(steps)
         if highways:
-            .Marker(
+            folium.Marker(
                 location=start_coords,
-                icon=.DivIcon(html=f'<div style="font-size: 10pt">{label} uses:<br>' + "<br>".join(highways) + '</div>')
+                icon=folium.DivIcon(html=f'<div style="font-size: 10pt">{label} uses:<br>' + "<br>".join(highways) + '</div>')
             ).add_to(m)
         return m
 
@@ -324,7 +324,7 @@ with main_col:
                         origin_coords, dest_coords,
                         tolled_route["polyline"], tolled_route["steps"], "With Tolls"
                     )
-                    st_folium(map_tolled, width=850, height=400)
+                    st_folium(map_tolled, width=700, height=400)
 
             if nontolled_route:
                 with cols[1 if tolled_route else 0]:
@@ -333,7 +333,7 @@ with main_col:
                         origin_coords, dest_coords,
                         nontolled_route["polyline"], nontolled_route["steps"], "No Tolls"
                     )
-                    st_folium(map_nontolled, width=850, height=400)
+                    st_folium(map_nontolled, width=700, height=400)
 
 # ================= RIGHT TOOLBAR: HustlerAI =========================
 with ai_col:
