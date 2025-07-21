@@ -8,12 +8,6 @@ from datetime import datetime
 from google_maps import get_driving_route
 from flight_data import get_flights, get_airports_by_coords
 
-import googlemaps
-
-# --- Google Places setup
-PLACES_API_KEY = st.secrets["GCP"]["PLACES_API_KEY"]
-gmaps_places = googlemaps.Client(key=PLACES_API_KEY)
-
 GAS_PRICE = 3.140
 
 def estimate_gas_cost(miles, mpg):
@@ -54,27 +48,6 @@ def show_map_with_route(start_coords, end_coords, polyline_str, steps, label):
 
 def format_coords(coords):
     return f"{coords[0]},{coords[1]}"
-
-def find_nearby(category, lat, lon, radius=4000):
-    """category: 'lodging', 'gas_station', or 'restaurant'"""
-    try:
-        res = gmaps_places.places_nearby(
-            location=(lat, lon),
-            radius=radius,
-            type=category
-        )
-        results = res.get("results", [])
-        if not results:
-            return None
-        r = results[0]
-        return {
-            "name": r.get("name"),
-            "address": r.get("vicinity"),
-            "rating": r.get("rating"),
-            "maps_url": f"https://maps.google.com/?q={r['geometry']['location']['lat']},{r['geometry']['location']['lng']}"
-        }
-    except Exception as e:
-        return None
 
 # --- Initialize session state ---
 for key in [
@@ -170,6 +143,7 @@ if st.session_state.run_triggered and origin_coords and dest_coords:
                 results.append(("Drive (no tolls)", nontolled_route["duration_mins"], nontolled_route["distance_miles"], gas_cost))
 
         if "Flight" in transport_modes:
+            # Only run if both airports are selected
             if st.session_state.flight_origin_airport and st.session_state.flight_dest_airport:
                 flights, error = get_flights(
                     st.session_state.flight_origin_airport["iataCode"],
@@ -217,60 +191,3 @@ if st.session_state.run_triggered and origin_coords and dest_coords:
                     nontolled_route["polyline"], nontolled_route["steps"], "No Tolls"
                 )
                 st_folium(map_nontolled, width=700, height=400)
-
-        # ---- REST STOP PLANNER ----
-        st.markdown("### 🚏 Plan your rest stops")
-        interval_hours = st.number_input(
-            "How many hours do you want between stops? (e.g., enter 3 for every 3 hours)",
-            min_value=1, max_value=12, value=3, step=1
-        )
-
-        active_route = tolled_route if tolled_route else nontolled_route
-        if active_route:
-            steps = active_route["steps"]
-            stops = []
-            cum_time = 0
-            intervals = []
-            total_time = active_route["duration_mins"] / 60  # hours
-            step_times = [s["duration"]["value"] / 60 for s in steps]
-
-            next_stop = interval_hours
-            for i, step in enumerate(steps):
-                cum_time += step_times[i]
-                if cum_time >= next_stop and next_stop < total_time:
-                    loc = step["end_location"]
-                    lat, lon = loc["lat"], loc["lng"]
-                    intervals.append((next_stop, lat, lon))
-                    next_stop += interval_hours
-
-            if not intervals:
-                st.write("Your route is too short for any stops with the current interval.")
-            else:
-                for i, (hr, lat, lon) in enumerate(intervals, 1):
-                    st.markdown(f"#### Stop #{i} (Around {hr:.1f} hours from start)")
-                    hotel = find_nearby('lodging', lat, lon)
-                    gas = find_nearby('gas_station', lat, lon)
-                    food = find_nearby('restaurant', lat, lon)
-
-                    cols = st.columns(3)
-                    with cols[0]:
-                        if hotel:
-                            st.write(f"🏨 **Hotel**: [{hotel['name']}]({hotel['maps_url']})")
-                            st.write(f"Address: {hotel['address']}")
-                            if hotel.get("rating"): st.write(f"Rating: {hotel['rating']}")
-                        else:
-                            st.write("No hotel found nearby.")
-                    with cols[1]:
-                        if gas:
-                            st.write(f"⛽ **Gas**: [{gas['name']}]({gas['maps_url']})")
-                            st.write(f"Address: {gas['address']}")
-                            if gas.get("rating"): st.write(f"Rating: {gas['rating']}")
-                        else:
-                            st.write("No gas station found nearby.")
-                    with cols[2]:
-                        if food:
-                            st.write(f"🍔 **Food**: [{food['name']}]({food['maps_url']})")
-                            st.write(f"Address: {food['address']}")
-                            if food.get("rating"): st.write(f"Rating: {food['rating']}")
-                        else:
-                            st.write("No restaurant found nearby.")
