@@ -88,7 +88,7 @@ if destination_query and len(destination_query) >= 3:
     if dest_opts:
         st.session_state.dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
 
-if st.button("Compare Routes"):
+if st.button("Find Routes"):
     st.session_state.run_triggered = True
 
 if st.session_state.run_triggered and st.session_state.origin_coords and st.session_state.dest_coords:
