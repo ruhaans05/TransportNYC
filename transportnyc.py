@@ -1,8 +1,6 @@
 import streamlit as st
 import requests
 import folium
-import os
-from datetime import datetime, timedelta
 from streamlit_folium import st_folium
 
 from google_maps import get_driving_route, get_transit_route
@@ -30,6 +28,17 @@ def show_map(start_coords, end_coords):
     folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
     return m
 
+def format_coords(coords):
+    return f"{coords[0]},{coords[1]}"
+
+# Initialize session state variables if not present
+if "origin_coords" not in st.session_state:
+    st.session_state.origin_coords = None
+if "dest_coords" not in st.session_state:
+    st.session_state.dest_coords = None
+if "run_triggered" not in st.session_state:
+    st.session_state.run_triggered = False
+
 # === Streamlit UI ===
 st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 TransportNYC")
@@ -45,20 +54,24 @@ transport_modes = st.multiselect("Compare transport modes", [
     "Flight"
 ], default=["Drive (no tolls)"])
 
+# Show origin place suggestions
 if origin_query and len(origin_query) >= 3:
     origin_opts = get_place_suggestions(origin_query)
     if origin_opts:
         st.session_state.origin_coords = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")["value"]
 
+# Show destination place suggestions
 if destination_query and len(destination_query) >= 3:
     dest_opts = get_place_suggestions(destination_query)
     if dest_opts:
         st.session_state.dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
 
+# Run the comparison when button clicked
 if st.button("Compare Routes"):
     st.session_state.run_triggered = True
 
-if st.session_state.get("run_triggered") and st.session_state.get("origin_coords") and st.session_state.get("dest_coords"):
+# Perform route fetching and display results
+if st.session_state.run_triggered and st.session_state.origin_coords and st.session_state.dest_coords:
     origin = st.session_state.origin_coords
     destination = st.session_state.dest_coords
     results = []
@@ -66,27 +79,25 @@ if st.session_state.get("run_triggered") and st.session_state.get("origin_coords
     with st.spinner("Fetching route data..."):
 
         if "Drive (with tolls)" in transport_modes:
-            route = get_driving_route(origin, destination, avoid_tolls=False)
+            route = get_driving_route(format_coords(origin), format_coords(destination), avoid_tolls=False)
             if route:
                 gas_cost = estimate_gas_cost(route["distance_miles"])
                 results.append(("Drive (with tolls)", route["duration_mins"], route["distance_miles"], gas_cost))
 
         if "Drive (no tolls)" in transport_modes:
-            route = get_driving_route(origin, destination, avoid_tolls=True)
+            route = get_driving_route(format_coords(origin), format_coords(destination), avoid_tolls=True)
             if route:
                 gas_cost = estimate_gas_cost(route["distance_miles"])
                 results.append(("Drive (no tolls)", route["duration_mins"], route["distance_miles"], gas_cost))
 
         if "Transit" in transport_modes:
-            transit = get_transit_route(origin, destination)
+            transit = get_transit_route(format_coords(origin), format_coords(destination))
             if transit:
                 fare = transit["fare"] if transit["fare"] else 0
                 results.append(("Transit", transit["duration_mins"], None, fare))
 
         if "Flight" in transport_modes:
-            city_from = origin_query
-            city_to = destination_query
-            flights, error = get_flights(city_from, city_to)
+            flights, error = get_flights(origin, destination)  # pass coords tuples for flight lookup
             if error:
                 st.write(f"✈️ Flight search failed: {error}")
             elif not flights:
@@ -100,7 +111,7 @@ if st.session_state.get("run_triggered") and st.session_state.get("origin_coords
         for mode, time, distance, cost in results:
             st.markdown(f"### 🚀 {mode}")
             st.write(f"**Time:** {time:.1f} minutes")
-            if distance:
+            if distance is not None:
                 st.write(f"**Distance:** {distance:.2f} miles")
             label = "Gas Cost" if "Drive" in mode else "Fare"
             st.write(f"**{label}:** ${cost:.2f}")
