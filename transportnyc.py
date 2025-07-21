@@ -168,7 +168,7 @@ if st.session_state.run_triggered and origin_coords and dest_coords:
             st.write(f"**Time:** {time:.1f} minutes")
             if distance is not None:
                 st.write(f"**Distance:** {distance:.2f} miles")
-            label = "Gas Cost" if "Drive" in mode else "Fare"
+            label = "Approx. Gas Cost" if "Drive" in mode else "Fare"
             st.write(f"**{label}:** ${cost:.2f}")
 
         st.markdown("### 🗺 Route Maps")
