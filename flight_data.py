@@ -15,24 +15,26 @@ def get_amadeus_token():
         return res.json()["access_token"]
     return None
 
-def get_nearest_airport(city, token):
+def get_nearest_airport_by_coords(lat, lon, token):
     res = requests.get("https://test.api.amadeus.com/v1/reference-data/locations", params={
-        "keyword": city,
+        "latitude": lat,
+        "longitude": lon,
+        "radius": 50,  # kilometers radius
         "subType": "AIRPORT",
-        "view": "FULL",
         "page[limit]": 3
     }, headers={"Authorization": f"Bearer {token}"})
-    if res.status_code == 200 and res.json()["data"]:
+
+    if res.status_code == 200 and res.json().get("data"):
         return res.json()["data"][0]["iataCode"]
     return None
 
-def get_flights(from_city, to_city):
+def get_flights(from_coords, to_coords):
     token = get_amadeus_token()
     if not token:
         return None, "Auth failed"
 
-    from_iata = get_nearest_airport(from_city, token)
-    to_iata = get_nearest_airport(to_city, token)
+    from_iata = get_nearest_airport_by_coords(from_coords[0], from_coords[1], token)
+    to_iata = get_nearest_airport_by_coords(to_coords[0], to_coords[1], token)
 
     if not from_iata or not to_iata:
         return None, "Could not find airports"
