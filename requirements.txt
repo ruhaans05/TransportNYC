@@ -3,3 +3,4 @@ requests
 googlemaps
 folium
 streamlit-folium
+polyline
