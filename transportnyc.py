@@ -1,4 +1,128 @@
 import streamlit as st
+import os
+import json
+from datetime import datetime
+
+USERS_FILE = "users.json"
+CHAT_FILE = "chat.json"
+
+def load_json(filename, default):
+    if os.path.exists(filename):
+        with open(filename, "r") as f:
+            return json.load(f)
+    return default
+
+def save_json(filename, obj):
+    with open(filename, "w") as f:
+        json.dump(obj, f, indent=2)
+
+users = load_json(USERS_FILE, [])
+chat_log = load_json(CHAT_FILE, [])
+
+def register_user(username):
+    username = username.strip()
+    if username and username not in users:
+        users.append(username)
+        save_json(USERS_FILE, users)
+        return True
+    return False
+
+def authenticate(username):
+    return username.strip() in users
+
+# ---- Sidebar: Login / Create User ----
+st.sidebar.title("🧑‍💼 Login or Create Account")
+
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+if not st.session_state.username:
+    action = st.sidebar.radio("Login/Create:", ["Login", "Create Account"])
+    username_input = st.sidebar.text_input("Username")
+    if action == "Login":
+        if st.sidebar.button("Login"):
+            if authenticate(username_input):
+                st.session_state.username = username_input.strip()
+                st.sidebar.success(f"Logged in as {username_input}")
+            else:
+                st.sidebar.error("User does not exist. Try creating an account.")
+    else:  # Create Account
+        if st.sidebar.button("Create Account"):
+            if register_user(username_input):
+                st.session_state.username = username_input.strip()
+                st.sidebar.success(f"Account created! Logged in as {username_input}")
+            else:
+                st.sidebar.error("Username taken or invalid.")
+
+else:
+    st.sidebar.markdown(f"**Logged in as `{st.session_state.username}`**")
+    if st.sidebar.button("Logout"):
+        st.session_state.username = None
+
+# ---- Chat Section ----
+st.sidebar.header("💬 Global & Private Chat")
+
+# Compose message
+msg = st.sidebar.text_input(
+    "Send a message (prefix with @username for private):",
+    key="msg_input"
+)
+
+if st.session_state.username and st.sidebar.button("Send"):
+    msg = msg.strip()
+    if msg:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        # Private message logic
+        if msg.startswith("@") and " " in msg:
+            # Format: @targetuser your message
+            split_idx = msg.find(" ")
+            target = msg[1:split_idx]
+            content = msg[split_idx+1:]
+            if target in users:
+                chat_log.append({
+                    "type": "private",
+                    "from": st.session_state.username,
+                    "to": target,
+                    "msg": content,
+                    "dt": now
+                })
+                save_json(CHAT_FILE, chat_log)
+                st.sidebar.success(f"Private message sent to {target}")
+            else:
+                st.sidebar.warning("User does not exist.")
+        else:
+            chat_log.append({
+                "type": "global",
+                "from": st.session_state.username,
+                "msg": msg,
+                "dt": now
+            })
+            save_json(CHAT_FILE, chat_log)
+
+# ---- Chat Display ----
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🗣 Chat Log")
+
+if st.session_state.username:
+    for chat in chat_log[-100:][::-1]:  # last 100 messages, newest on top
+        if chat["type"] == "global":
+            st.sidebar.markdown(f"**{chat['from']}** <span style='color:gray;font-size:10px'>{chat['dt']}</span><br>{chat['msg']}", unsafe_allow_html=True)
+        elif chat["type"] == "private":
+            # Show if you are sender or recipient
+            if chat["to"] == st.session_state.username or chat["from"] == st.session_state.username:
+                pm_target = "(to you)" if chat["to"] == st.session_state.username else f"(to {chat['to']})"
+                st.sidebar.markdown(
+                    f"<span style='color:#b91c1c;'>[Private] {chat['from']} {pm_target}</span> "
+                    f"<span style='color:gray;font-size:10px'>{chat['dt']}</span><br>{chat['msg']}",
+                    unsafe_allow_html=True
+                )
+else:
+    st.sidebar.info("Login to chat!")
+
+# --------- (Rest of your app goes below, e.g., route planner etc.) ----------
+
+
+import streamlit as st
 import requests
 import folium
 from streamlit_folium import st_folium
