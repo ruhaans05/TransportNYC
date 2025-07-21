@@ -96,7 +96,7 @@ if st.session_state.run_triggered and st.session_state.origin_coords and st.sess
         if "Flight" in transport_modes:
             flights, error = get_flights(origin, destination)
             if error:
-                st.write(f"✈️ Flight search failed: {error}")
+                st.write(f"✈️ Please enter two airport locations for flight data: {error}")
             elif not flights:
                 st.write("✈️ No flights found.")
             else:
