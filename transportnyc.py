@@ -385,7 +385,7 @@ if st.session_state.get("username"):
         context = ""
         if "origin_coords" in st.session_state and "dest_coords" in st.session_state:
             context = f"Origin: {st.session_state.origin_coords}, Destination: {st.session_state.dest_coords}."
-        user_ai_q = st.text_input("Ask HustlerAI about your route, trip, or anything:", key="hustlerai_input")
+        user_ai_q = st.text_input("Enter a prompt:", key="hustlerai_input")
         if st.button("Ask HustlerAI", key="hustlerai_btn") and user_ai_q.strip():
             with st.spinner("HustlerAI is thinking..."):
                 ai_reply = ask_hustlerai(user_ai_q, context)
