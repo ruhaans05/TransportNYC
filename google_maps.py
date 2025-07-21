@@ -3,14 +3,7 @@ import streamlit as st
 
 gmaps = googlemaps.Client(key=st.secrets["GCP_API_KEY"])
 
-def format_coords(coords):
-    # coords is expected as a tuple: (lat, lon)
-    return f"{coords[0]},{coords[1]}"
-
-def get_driving_route(origin, destination, avoid_tolls=False):
-    origin_str = format_coords(origin)
-    destination_str = format_coords(destination)
-
+def get_driving_route(origin_str, destination_str, avoid_tolls=False):
     directions = gmaps.directions(
         origin_str,
         destination_str,
@@ -28,10 +21,7 @@ def get_driving_route(origin, destination, avoid_tolls=False):
         "polyline": directions[0]["overview_polyline"]["points"]
     }
 
-def get_transit_route(origin, destination):
-    origin_str = format_coords(origin)
-    destination_str = format_coords(destination)
-
+def get_transit_route(origin_str, destination_str):
     directions = gmaps.directions(
         origin_str,
         destination_str,
