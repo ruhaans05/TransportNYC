@@ -1,69 +1,32 @@
-import requests
-import os
-from datetime import datetime, timedelta
 import streamlit as st
 
-AMADEUS_API_KEY = st.secrets["AMADEUS_KEY"]
-AMADEUS_API_SECRET = st.secrets["AMADEUS_SECRET"]
+def get_nearest_airport(location_query, token):
+    location_query = location_query.strip()
 
+    def query_airports(query):
+        res = requests.get("https://test.api.amadeus.com/v1/reference-data/locations", params={
+            "keyword": query,
+            "subType": "AIRPORT",
+            "view": "FULL",
+            "page[limit]": 5
+        }, headers={"Authorization": f"Bearer {token}"})
+        if res.status_code == 200:
+            data = res.json().get("data", [])
+            return data
+        return []
 
-def get_amadeus_token():
-    res = requests.post("https://test.api.amadeus.com/v1/security/oauth2/token", data={
-        "grant_type": "client_credentials",
-        "client_id": AMADEUS_API_KEY,
-        "client_secret": AMADEUS_API_SECRET
-    })
-    if res.status_code == 200:
-        return res.json()["access_token"]
-    return None
+    # First try with original query
+    airports = query_airports(location_query)
+    st.write(f"Airport search results for '{location_query}':", airports)
 
-def get_nearest_airport(city, token):
-    res = requests.get("https://test.api.amadeus.com/v1/reference-data/locations", params={
-        "keyword": city,
-        "subType": "AIRPORT",
-        "view": "FULL",
-        "page[limit]": 3
-    }, headers={"Authorization": f"Bearer {token}"})
-    if res.status_code == 200 and res.json()["data"]:
-        return res.json()["data"][0]["iataCode"]
-    return None
+    # Fallback: if no results, try splitting by space and retry with first word (e.g., 'Edison NJ' -> 'Edison')
+    if not airports and " " in location_query:
+        first_word = location_query.split(" ")[0]
+        airports = query_airports(first_word)
+        st.write(f"Fallback airport search results for '{first_word}':", airports)
 
-def get_flights(from_city, to_city):
-    token = get_amadeus_token()
-    if not token:
-        return None, "Auth failed"
-
-    from_iata = get_nearest_airport(from_city, token)
-    to_iata = get_nearest_airport(to_city, token)
-
-    if not from_iata or not to_iata:
-        return None, "Could not find airports"
-
-    departure_date = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
-
-    res = requests.get("https://test.api.amadeus.com/v2/shopping/flight-offers", params={
-        "originLocationCode": from_iata,
-        "destinationLocationCode": to_iata,
-        "departureDate": departure_date,
-        "adults": 1,
-        "max": 3,
-        "currencyCode": "USD"
-    }, headers={"Authorization": f"Bearer {token}"})
-
-    if res.status_code != 200 or "data" not in res.json():
-        return None, f"No flights found from {from_iata} to {to_iata}"
-
-    flights = []
-    for flight in res.json()["data"]:
-        price = flight["price"]["total"]
-        duration = flight["itineraries"][0]["duration"].replace("PT", "").lower()
-        airline = flight["validatingAirlineCodes"][0]
-        flights.append({
-            "from": from_iata,
-            "to": to_iata,
-            "airline": airline,
-            "price": price,
-            "duration": duration
-        })
-
-    return flights, None
+    if airports:
+        # Optionally: pick the closest airport by some criteria
+        return airports[0]["iataCode"]
+    else:
+        return None
