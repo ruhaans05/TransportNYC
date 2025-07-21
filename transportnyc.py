@@ -3,7 +3,12 @@ import os
 import json
 from datetime import datetime
 import hashlib
+import requests
+import folium
+from streamlit_folium import st_folium
+import polyline as pl
 
+# ================= USER & CHAT SYSTEM ====================
 USERS_FILE = "users.json"
 CHAT_FILE = "chat.json"
 
@@ -52,344 +57,317 @@ def authenticate(username, password):
         return True
     return False
 
-# ---- Sidebar: Login / Create User ----
-st.sidebar.title("🧑‍💼 Login or Create Account")
-
-if "username" not in st.session_state:
-    st.session_state.username = None
-
-if not st.session_state.username:
-    action = st.sidebar.radio("Login/Create:", ["Login", "Create Account"])
-    username_input = st.sidebar.text_input("Username")
-    password_input = st.sidebar.text_input("Password", type="password")
-    if action == "Login":
-        if st.sidebar.button("Login"):
-            if authenticate(username_input, password_input):
-                st.session_state.username = username_input.strip()
-                st.sidebar.success(f"Logged in as {username_input}")
-            else:
-                st.sidebar.error("Login failed. Invalid username or password.")
-    else:  # Create Account
-        if st.sidebar.button("Create Account"):
-            if register_user(username_input, password_input):
-                st.session_state.username = username_input.strip()
-                st.sidebar.success(f"Account created! Logged in as {username_input}")
-            else:
-                st.sidebar.error("Username taken, invalid, or password missing.")
-
-else:
-    st.sidebar.markdown(f"**Logged in as `{st.session_state.username}`**")
-    if st.sidebar.button("Logout"):
+# =============== STREAMLIT SIDEBAR: LOGIN & CHAT ====================
+with st.sidebar:
+    st.title("🧑‍💼 Login or Create Account")
+    if "username" not in st.session_state:
         st.session_state.username = None
 
-# ---- Chat Section ----
-st.sidebar.header("💬 Global & Private Chat")
+    if not st.session_state.username:
+        action = st.radio("Login/Create:", ["Login", "Create Account"])
+        username_input = st.text_input("Username")
+        password_input = st.text_input("Password", type="password")
+        if action == "Login":
+            if st.button("Login"):
+                if authenticate(username_input, password_input):
+                    st.session_state.username = username_input.strip()
+                    st.success(f"Logged in as {username_input}")
+                else:
+                    st.error("Login failed. Invalid username or password.")
+        else:  # Create Account
+            if st.button("Create Account"):
+                if register_user(username_input, password_input):
+                    st.session_state.username = username_input.strip()
+                    st.success(f"Account created! Logged in as {username_input}")
+                else:
+                    st.error("Username taken, invalid, or password missing.")
+    else:
+        st.markdown(f"**Logged in as `{st.session_state.username}`**")
+        if st.button("Logout"):
+            st.session_state.username = None
 
-msg = st.sidebar.text_input(
-    "Send a message (prefix with @username for private):\nThis global chatting feature allows you to ask questions about this app, your routes, and other travel info.",
-    key="msg_input"
-)
+    # ---- Chat Section ----
+    st.header("💬 Global & Private Chat")
+    msg = st.text_input(
+        "Send a message (prefix with @username for private):\nThis global chatting feature allows you to ask questions about this app, your routes, and other travel info.",
+        key="msg_input"
+    )
 
-if st.session_state.username and st.sidebar.button("Send"):
-    msg = msg.strip()
-    if msg:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        # Private message logic
-        if msg.startswith("@") and " " in msg:
-            split_idx = msg.find(" ")
-            target = msg[1:split_idx]
-            content = msg[split_idx+1:]
-            if get_user_obj(target):
+    if st.session_state.username and st.button("Send"):
+        msg = msg.strip()
+        if msg:
+            now = datetime.now().strftime("%Y-%m-%d %H:%M")
+            # Private message logic
+            if msg.startswith("@") and " " in msg:
+                split_idx = msg.find(" ")
+                target = msg[1:split_idx]
+                content = msg[split_idx+1:]
+                if get_user_obj(target):
+                    chat_log.append({
+                        "type": "private",
+                        "from": st.session_state.username,
+                        "to": target,
+                        "msg": content,
+                        "dt": now
+                    })
+                    save_json(CHAT_FILE, chat_log)
+                    st.success(f"Private message sent to {target}")
+                else:
+                    st.warning("User does not exist.")
+            else:
                 chat_log.append({
-                    "type": "private",
+                    "type": "global",
                     "from": st.session_state.username,
-                    "to": target,
-                    "msg": content,
+                    "msg": msg,
                     "dt": now
                 })
                 save_json(CHAT_FILE, chat_log)
-                st.sidebar.success(f"Private message sent to {target}")
-            else:
-                st.sidebar.warning("User does not exist.")
-        else:
-            chat_log.append({
-                "type": "global",
-                "from": st.session_state.username,
-                "msg": msg,
-                "dt": now
-            })
-            save_json(CHAT_FILE, chat_log)
 
-# ---- Chat Display ----
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🗣 Chat Log")
-
-if st.session_state.username:
-    for chat in chat_log[-100:][::-1]:  # last 100 messages, newest on top
-        if chat["type"] == "global":
-            st.sidebar.markdown(
-                f"**{chat['from']}** <span style='color:gray;font-size:10px'>{chat['dt']}</span><br>{chat['msg']}",
-                unsafe_allow_html=True
-            )
-        elif chat["type"] == "private":
-            # Show if you are sender or recipient
-            if chat["to"] == st.session_state.username or chat["from"] == st.session_state.username:
-                pm_target = "(to you)" if chat["to"] == st.session_state.username else f"(to {chat['to']})"
-                st.sidebar.markdown(
-                    f"<span style='color:#b91c1c;'>[Private] {chat['from']} {pm_target}</span> "
-                    f"<span style='color:gray;font-size:10px'>{chat['dt']}</span><br>{chat['msg']}",
+    # ---- Chat Display ----
+    st.markdown("---")
+    st.markdown("### 🗣 Chat Log")
+    if st.session_state.username:
+        for chat in chat_log[-100:][::-1]:  # last 100 messages, newest on top
+            if chat["type"] == "global":
+                st.markdown(
+                    f"**{chat['from']}** <span style='color:gray;font-size:10px'>{chat['dt']}</span><br>{chat['msg']}",
                     unsafe_allow_html=True
                 )
-else:
-    st.sidebar.info("Reload to login and chat!")
+            elif chat["type"] == "private":
+                # Show if you are sender or recipient
+                if chat["to"] == st.session_state.username or chat["from"] == st.session_state.username:
+                    pm_target = "(to you)" if chat["to"] == st.session_state.username else f"(to {chat['to']})"
+                    st.markdown(
+                        f"<span style='color:#b91c1c;'>[Private] {chat['from']} {pm_target}</span> "
+                        f"<span style='color:gray;font-size:10px'>{chat['dt']}</span><br>{chat['msg']}",
+                        unsafe_allow_html=True
+                    )
+    else:
+        st.info("Reload to login and chat!")
 
-# --------- (Rest of your app goes below, e.g., route planner etc.) ----------
+# ================= MAIN APP COLUMN LAYOUT =====================
+# Main section in center, AI assistant on right!
+main_col, ai_col = st.columns([3, 1])  # 3:1 ratio for main/app and rightbar
 
-# --------- (Rest of your app below) ----------
+with main_col:
+    st.set_page_config(page_title="TransportNYC", layout="centered")
+    st.title("🚦 Hustler")
+    st.subheader("Optimize your routes for cost, gas, and time")
 
+    # ------ YOUR ORIGINAL LOGIC HERE --------------
+    GAS_PRICE = 3.140
 
+    def estimate_gas_cost(miles, mpg):
+        return round((miles / mpg) * GAS_PRICE, 2)
 
+    def get_place_suggestions(query):
+        try:
+            res = requests.get("https://nominatim.openstreetmap.org/search", params={
+                "q": query, "format": "json", "addressdetails": 1, "limit": 5
+            }, headers={"User-Agent": "TransportNYC-App"})
+            return [{"label": i["display_name"], "value": (float(i["lat"]), float(i["lon"]))} for i in res.json()]
+        except:
+            return []
 
+    def extract_highways_from_steps(steps):
+        highways = []
+        for step in steps:
+            instr = step.get("html_instructions", "")
+            if any(k in instr for k in ["I-", "US-", "Route", "Hwy", "Highway", "Turnpike", "Freeway", "Parkway"]):
+                highways.append(instr)
+        return list(set(highways))[:6]
 
+    def show_map_with_route(start_coords, end_coords, polyline_str, steps, label):
+        m = folium.Map(location=[(start_coords[0] + end_coords[0]) / 2,
+                                 (start_coords[1] + end_coords[1]) / 2], zoom_start=11)
+        folium.Marker(start_coords, tooltip="Start", icon=folium.Icon(color="green")).add_to(m)
+        folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
+        points = pl.decode(polyline_str)
+        folium.PolyLine(points, color="blue", weight=5, opacity=0.7).add_to(m)
 
-# --------- (Rest of your app goes below, e.g., route planner etc.) ----------
+        highways = extract_highways_from_steps(steps)
+        if highways:
+            folium.Marker(
+                location=start_coords,
+                icon=folium.DivIcon(html=f'<div style="font-size: 10pt">{label} uses:<br>' + "<br>".join(highways) + '</div>')
+            ).add_to(m)
+        return m
 
-import openai
+    def format_coords(coords):
+        return f"{coords[0]},{coords[1]}"
 
-def ask_hustlerai(question, context=None):
-    """
-    Wraps OpenAI GPT-3.5/4 chat completion with system prompt for route assistant.
-    Optionally pass 'context' string about the user's planned route.
-    """
-    openai.api_key = st.secrets["OPENAI_API_KEY"]
-    system = "You are HustlerAI, a friendly and knowledgeable NYC transportation assistant. Answer user questions clearly and accurately. You know about driving, flights, gas prices, travel time, and trip planning."
-    if context:
-        system += f" The current route or plan context is: {context}"
+    for key in [
+        "origin_coords", "dest_coords", "run_triggered",
+        "flight_origin_airport", "flight_dest_airport"
+    ]:
+        if key not in st.session_state:
+            st.session_state[key] = None if key != "run_triggered" else False
+
+    # 1. Transport mode selection
+    transport_modes = st.multiselect(
+        "Choose transport modes", [
+            "Drive (with tolls)",
+            "Drive (no tolls)",
+            "Flight"
+        ],
+        default=["Drive (no tolls)"]
+    )
+
+    # 2. MPG input (AFTER transport mode)
+    mpg_input = st.text_input("Optional: Enter your vehicle's mpg:", value="")
     try:
-        resp = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # Change to gpt-4 if desired and available
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": question}
-            ],
-            max_tokens=500,
-            temperature=0.25
-        )
-        return resp.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Error from HustlerAI: {e}"
-
-# --------- (Rest of your app goes below, e.g., route planner etc.) ----------
-
-
-import streamlit as st
-import requests
-import folium
-from streamlit_folium import st_folium
-import polyline as pl
-from datetime import datetime
-
-from google_maps import get_driving_route
-from flight_data import get_flights, get_airports_by_coords
-
-GAS_PRICE = 3.140
-
-def estimate_gas_cost(miles, mpg):
-    return round((miles / mpg) * GAS_PRICE, 2)
-
-def get_place_suggestions(query):
-    try:
-        res = requests.get("https://nominatim.openstreetmap.org/search", params={
-            "q": query, "format": "json", "addressdetails": 1, "limit": 5
-        }, headers={"User-Agent": "TransportNYC-App"})
-        return [{"label": i["display_name"], "value": (float(i["lat"]), float(i["lon"]))} for i in res.json()]
+        mpg_val = float(mpg_input)
+        if mpg_val <= 0:
+            raise ValueError
     except:
-        return []
+        mpg_val = 22  # Default
 
-def extract_highways_from_steps(steps):
-    highways = []
-    for step in steps:
-        instr = step.get("html_instructions", "")
-        if any(k in instr for k in ["I-", "US-", "Route", "Hwy", "Highway", "Turnpike", "Freeway", "Parkway"]):
-            highways.append(instr)
-    return list(set(highways))[:6]
+    # 3. Location selection
+    origin_query = st.text_input("Starting Point", key="origin_input")
+    destination_query = st.text_input("Destination", key="dest_input")
 
-def show_map_with_route(start_coords, end_coords, polyline_str, steps, label):
-    m = folium.Map(location=[(start_coords[0] + end_coords[0]) / 2,
-                             (start_coords[1] + end_coords[1]) / 2], zoom_start=11)
-    folium.Marker(start_coords, tooltip="Start", icon=folium.Icon(color="green")).add_to(m)
-    folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
-    points = pl.decode(polyline_str)
-    folium.PolyLine(points, color="blue", weight=5, opacity=0.7).add_to(m)
+    origin_coords, dest_coords = None, None
 
-    highways = extract_highways_from_steps(steps)
-    if highways:
-        folium.Marker(
-            location=start_coords,
-            icon=folium.DivIcon(html=f'<div style="font-size: 10pt">{label} uses:<br>' + "<br>".join(highways) + '</div>')
-        ).add_to(m)
-    return m
+    if origin_query and len(origin_query) >= 3:
+        origin_opts = get_place_suggestions(origin_query)
+        if origin_opts:
+            st.session_state.origin_coords = st.selectbox(
+                "Select Start", origin_opts,
+                format_func=lambda x: x["label"], key="origin_select"
+            )["value"]
+            origin_coords = st.session_state.origin_coords
 
-def format_coords(coords):
-    return f"{coords[0]},{coords[1]}"
+    if destination_query and len(destination_query) >= 3:
+        dest_opts = get_place_suggestions(destination_query)
+        if dest_opts:
+            st.session_state.dest_coords = st.selectbox(
+                "Select Destination", dest_opts,
+                format_func=lambda x: x["label"], key="dest_select"
+            )["value"]
+            dest_coords = st.session_state.dest_coords
 
-# --- Initialize session state ---
-for key in [
-    "origin_coords", "dest_coords", "run_triggered",
-    "flight_origin_airport", "flight_dest_airport"
-]:
-    if key not in st.session_state:
-        st.session_state[key] = None if key != "run_triggered" else False
+    # 4. Flight: Show dropdowns for airport selection if both coords exist
+    from google_maps import get_driving_route
+    from flight_data import get_flights, get_airports_by_coords
+    if "Flight" in transport_modes and origin_coords and dest_coords:
+        airports_from = get_airports_by_coords(origin_coords[0], origin_coords[1])
+        airports_to = get_airports_by_coords(dest_coords[0], dest_coords[1])
+        st.session_state.flight_origin_airport = None
+        st.session_state.flight_dest_airport = None
+        if airports_from:
+            st.session_state.flight_origin_airport = st.selectbox(
+                "Select Departure Airport", airports_from,
+                format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="origin_airport_select"
+            )
+        if airports_to:
+            st.session_state.flight_dest_airport = st.selectbox(
+                "Select Arrival Airport", airports_to,
+                format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="dest_airport_select"
+            )
 
-st.set_page_config(page_title="TransportNYC", layout="centered")
-st.title("🚦 Hustler")
-st.subheader("Optimize your routes for cost, gas, and time")
+    if st.button("Find Routes"):
+        st.session_state.run_triggered = True
 
-# 1. Transport mode selection
-transport_modes = st.multiselect(
-    "Choose transport modes", [
-        "Drive (with tolls)",
-        "Drive (no tolls)",
-        "Flight"
-    ],
-    default=["Drive (no tolls)"]
-)
+    if st.session_state.run_triggered and origin_coords and dest_coords:
+        results = []
+        with st.spinner("Fetching route data..."):
+            tolled_route = None
+            nontolled_route = None
 
-# 2. MPG input (AFTER transport mode)
-mpg_input = st.text_input("Optional: Enter your vehicle's mpg:", value="")
-try:
-    mpg_val = float(mpg_input)
-    if mpg_val <= 0:
-        raise ValueError
-except:
-    mpg_val = 22  # Default
+            if "Drive (with tolls)" in transport_modes:
+                tolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=False)
+                if tolled_route:
+                    gas_cost = estimate_gas_cost(tolled_route["distance_miles"], mpg_val)
+                    results.append(("Drive (with tolls)", tolled_route["duration_mins"], tolled_route["distance_miles"], gas_cost))
 
-# 3. Location selection
-origin_query = st.text_input("Starting Point", key="origin_input")
-destination_query = st.text_input("Destination", key="dest_input")
+            if "Drive (no tolls)" in transport_modes:
+                nontolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=True)
+                if nontolled_route:
+                    gas_cost = estimate_gas_cost(nontolled_route["distance_miles"], mpg_val)
+                    results.append(("Drive (no tolls)", nontolled_route["duration_mins"], nontolled_route["distance_miles"], gas_cost))
 
-origin_coords, dest_coords = None, None
+            if "Flight" in transport_modes:
+                # Only run if both airports are selected
+                if st.session_state.flight_origin_airport and st.session_state.flight_dest_airport:
+                    flights, error = get_flights(
+                        st.session_state.flight_origin_airport["iataCode"],
+                        st.session_state.flight_dest_airport["iataCode"]
+                    )
+                    if error:
+                        st.write(f"✈️ Airport error: {error}")
+                    elif not flights:
+                        date_str = datetime.utcnow().strftime("%Y-%m-%d")
+                        origin_txt = st.session_state.flight_origin_airport["iataCode"]
+                        dest_txt = st.session_state.flight_dest_airport["iataCode"]
+                        link = f"https://www.google.com/travel/flights?q=flights+from+{origin_txt}+to+{dest_txt}+on+{date_str}"
+                        st.markdown(f"✈️ No flights found. [Search on Google Flights]({link})")
+                    else:
+                        st.markdown("### ✈️ Flight Options")
+                        for f in flights:
+                            st.write(f"• {f['from']} → {f['to']} | Airline: {f['airline']} | Duration: {f['duration']} | Price: ${f['price']}")
 
-if origin_query and len(origin_query) >= 3:
-    origin_opts = get_place_suggestions(origin_query)
-    if origin_opts:
-        st.session_state.origin_coords = st.selectbox(
-            "Select Start", origin_opts,
-            format_func=lambda x: x["label"], key="origin_select"
-        )["value"]
-        origin_coords = st.session_state.origin_coords
+        if results:
+            for mode, time, distance, cost in results:
+                st.markdown(f"### 🚀 {mode}")
+                st.write(f"**Time:** {time:.1f} minutes")
+                if distance is not None:
+                    st.write(f"**Distance:** {distance:.2f} miles")
+                label = "Approx. Gas Cost" if "Drive" in mode else "Fare"
+                st.write(f"**{label}:** ${cost:.2f}")
 
-if destination_query and len(destination_query) >= 3:
-    dest_opts = get_place_suggestions(destination_query)
-    if dest_opts:
-        st.session_state.dest_coords = st.selectbox(
-            "Select Destination", dest_opts,
-            format_func=lambda x: x["label"], key="dest_select"
-        )["value"]
-        dest_coords = st.session_state.dest_coords
-
-# 4. Flight: Show dropdowns for airport selection if both coords exist
-if "Flight" in transport_modes and origin_coords and dest_coords:
-    airports_from = get_airports_by_coords(origin_coords[0], origin_coords[1])
-    airports_to = get_airports_by_coords(dest_coords[0], dest_coords[1])
-    st.session_state.flight_origin_airport = None
-    st.session_state.flight_dest_airport = None
-    if airports_from:
-        st.session_state.flight_origin_airport = st.selectbox(
-            "Select Departure Airport", airports_from,
-            format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="origin_airport_select"
-        )
-    if airports_to:
-        st.session_state.flight_dest_airport = st.selectbox(
-            "Select Arrival Airport", airports_to,
-            format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="dest_airport_select"
-        )
-
-if st.button("Find Routes"):
-    st.session_state.run_triggered = True
-
-if st.session_state.run_triggered and origin_coords and dest_coords:
-    results = []
-    with st.spinner("Fetching route data..."):
-        tolled_route = None
-        nontolled_route = None
-
-        if "Drive (with tolls)" in transport_modes:
-            tolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=False)
+            st.markdown("### 🗺 Route Maps")
+            cols = st.columns(2 if (tolled_route and nontolled_route) else 1)
             if tolled_route:
-                gas_cost = estimate_gas_cost(tolled_route["distance_miles"], mpg_val)
-                results.append(("Drive (with tolls)", tolled_route["duration_mins"], tolled_route["distance_miles"], gas_cost))
+                with cols[0]:
+                    st.markdown("#### Drive (with tolls)")
+                    map_tolled = show_map_with_route(
+                        origin_coords, dest_coords,
+                        tolled_route["polyline"], tolled_route["steps"], "With Tolls"
+                    )
+                    st_folium(map_tolled, width=700, height=400)
 
-        if "Drive (no tolls)" in transport_modes:
-            nontolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=True)
             if nontolled_route:
-                gas_cost = estimate_gas_cost(nontolled_route["distance_miles"], mpg_val)
-                results.append(("Drive (no tolls)", nontolled_route["duration_mins"], nontolled_route["distance_miles"], gas_cost))
+                with cols[1 if tolled_route else 0]:
+                    st.markdown("#### Drive (no tolls)")
+                    map_nontolled = show_map_with_route(
+                        origin_coords, dest_coords,
+                        nontolled_route["polyline"], nontolled_route["steps"], "No Tolls"
+                    )
+                    st_folium(map_nontolled, width=700, height=400)
 
-        if "Flight" in transport_modes:
-            # Only run if both airports are selected
-            if st.session_state.flight_origin_airport and st.session_state.flight_dest_airport:
-                flights, error = get_flights(
-                    st.session_state.flight_origin_airport["iataCode"],
-                    st.session_state.flight_dest_airport["iataCode"]
-                )
-                if error:
-                    st.write(f"✈️ Airport error: {error}")
-                elif not flights:
-                    date_str = datetime.utcnow().strftime("%Y-%m-%d")
-                    origin_txt = st.session_state.flight_origin_airport["iataCode"]
-                    dest_txt = st.session_state.flight_dest_airport["iataCode"]
-                    link = f"https://www.google.com/travel/flights?q=flights+from+{origin_txt}+to+{dest_txt}+on+{date_str}"
-                    st.markdown(f"✈️ No flights found. [Search on Google Flights]({link})")
-                else:
-                    st.markdown("### ✈️ Flight Options")
-                    for f in flights:
-                        st.write(f"• {f['from']} → {f['to']} | Airline: {f['airline']} | Duration: {f['duration']} | Price: ${f['price']}")
+# ================= RIGHT TOOLBAR: HustlerAI =========================
+with ai_col:
+    st.markdown("## 🤖 HustlerAI\nAsk any route/travel/NYC question to your AI Companion!")
+    import openai
+    def ask_hustlerai(question, context=None):
+        openai.api_key = st.secrets["OPENAI_API_KEY"]
+        system = "You are HustlerAI, a friendly and knowledgeable NYC transportation assistant. Answer user questions clearly and accurately. You know about driving, flights, gas prices, travel time, and trip planning."
+        if context:
+            system += f" The current route or plan context is: {context}"
+        try:
+            resp = openai.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": question}
+                ],
+                max_tokens=500,
+                temperature=0.25
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception as e:
+            return f"Error from HustlerAI: {e}"
 
-    if results:
-        for mode, time, distance, cost in results:
-            st.markdown(f"### 🚀 {mode}")
-            st.write(f"**Time:** {time:.1f} minutes")
-            if distance is not None:
-                st.write(f"**Distance:** {distance:.2f} miles")
-            label = "Approx. Gas Cost" if "Drive" in mode else "Fare"
-            st.write(f"**{label}:** ${cost:.2f}")
-
-        st.markdown("### 🗺 Route Maps")
-        cols = st.columns(2 if (tolled_route and nontolled_route) else 1)
-
-        if tolled_route:
-            with cols[0]:
-                st.markdown("#### Drive (with tolls)")
-                map_tolled = show_map_with_route(
-                    origin_coords, dest_coords,
-                    tolled_route["polyline"], tolled_route["steps"], "With Tolls"
-                )
-                st_folium(map_tolled, width=700, height=400)
-
-        if nontolled_route:
-            with cols[1 if tolled_route else 0]:
-                st.markdown("#### Drive (no tolls)")
-                map_nontolled = show_map_with_route(
-                    origin_coords, dest_coords,
-                    nontolled_route["polyline"], nontolled_route["steps"], "No Tolls"
-                )
-                st_folium(map_nontolled, width=700, height=400)
-
-# --- HustlerAI Toolbar on the right ---
-
-if st.session_state.get("username"):
-    with st.expander("🤖 HustlerAI — Ask Route or Travel Questions to our AI Companion!", expanded=True):
-        st.markdown("\nAsk specific questions about your route, costs, flight availabities and more!")
-        # Gather context string for current planned route (if you want smarter answers)
+    if st.session_state.get("username"):
         context = ""
         if "origin_coords" in st.session_state and "dest_coords" in st.session_state:
             context = f"Origin: {st.session_state.origin_coords}, Destination: {st.session_state.dest_coords}."
-        user_ai_q = st.text_input("Enter a prompt:", key="hustlerai_input")
-        if st.button("Ask HustlerAI", key="hustlerai_btn") and user_ai_q.strip():
-            with st.spinner("HustlerAI is thinking..."):
-                ai_reply = ask_hustlerai(user_ai_q, context)
-                st.markdown(f"**HustlerAI:** {ai_reply}")
-else:
-    with st.expander("🤖 HustlerAI — Ask Route or Travel Questions", expanded=True):
-        st.info("Log in to use HustlerAI!")
+        ai_question = st.text_area("Ask HustlerAI about your trip, routes, or planning!", key="hustlerai_input_area")
+        if st.button("Ask HustlerAI", key="hustlerai_btn"):
+            if ai_question.strip():
+                with st.spinner("HustlerAI is thinking..."):
+                    ai_reply = ask_hustlerai(ai_question, context)
+                    st.success(f"**HustlerAI:** {ai_reply}")
+    else:
+        st.info("Login to use HustlerAI.")
+
