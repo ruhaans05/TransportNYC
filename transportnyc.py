@@ -6,7 +6,7 @@ import polyline as pl
 from datetime import datetime
 
 from google_maps import get_driving_route
-from flight_data import get_flights, get_airports_by_coords  # need to add this
+from flight_data import get_flights, get_airports_by_coords
 
 GAS_PRICE = 3.140
 
@@ -38,21 +38,22 @@ def show_map_with_route(start_coords, end_coords, polyline_str, steps, label):
     points = pl.decode(polyline_str)
     folium.PolyLine(points, color="blue", weight=5, opacity=0.7).add_to(m)
 
-    # Add highway info as floating text
     highways = extract_highways_from_steps(steps)
     if highways:
         folium.Marker(
             location=start_coords,
             icon=folium.DivIcon(html=f'<div style="font-size: 10pt">{label} uses:<br>' + "<br>".join(highways) + '</div>')
         ).add_to(m)
-
     return m
 
 def format_coords(coords):
     return f"{coords[0]},{coords[1]}"
 
-# Initialize session state
-for key in ["origin_coords", "dest_coords", "run_triggered", "flight_origin_airport", "flight_dest_airport"]:
+# --- Initialize session state ---
+for key in [
+    "origin_coords", "dest_coords", "run_triggered",
+    "flight_origin_airport", "flight_dest_airport"
+]:
     if key not in st.session_state:
         st.session_state[key] = None if key != "run_triggered" else False
 
@@ -60,54 +61,65 @@ st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 Hustler")
 st.subheader("Optimize your routes for cost, gas, and time")
 
-# --- UI Section ---
+# 1. Transport mode selection
+transport_modes = st.multiselect(
+    "Compare transport modes", [
+        "Drive (with tolls)",
+        "Drive (no tolls)",
+        "Flight"
+    ],
+    default=["Drive (no tolls)"]
+)
 
-# 1. MPG input (top)
+# 2. MPG input (AFTER transport mode)
 mpg_input = st.text_input("Optional: Enter your vehicle's mpg:", value="")
 try:
     mpg_val = float(mpg_input)
     if mpg_val <= 0:
         raise ValueError
 except:
-    mpg_val = 22
-
-# 2. Transport mode choice (moved up)
-transport_modes = st.multiselect("Compare transport modes", [
-    "Drive (with tolls)",
-    "Drive (no tolls)",
-    "Flight"
-], default=["Drive (no tolls)"])
+    mpg_val = 22  # Default
 
 # 3. Location selection
 origin_query = st.text_input("Starting Point", key="origin_input")
 destination_query = st.text_input("Destination", key="dest_input")
 
-origin_coords = None
-dest_coords = None
+origin_coords, dest_coords = None, None
 
 if origin_query and len(origin_query) >= 3:
     origin_opts = get_place_suggestions(origin_query)
     if origin_opts:
-        st.session_state.origin_coords = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")["value"]
+        st.session_state.origin_coords = st.selectbox(
+            "Select Start", origin_opts,
+            format_func=lambda x: x["label"], key="origin_select"
+        )["value"]
         origin_coords = st.session_state.origin_coords
 
 if destination_query and len(destination_query) >= 3:
     dest_opts = get_place_suggestions(destination_query)
     if dest_opts:
-        st.session_state.dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
+        st.session_state.dest_coords = st.selectbox(
+            "Select Destination", dest_opts,
+            format_func=lambda x: x["label"], key="dest_select"
+        )["value"]
         dest_coords = st.session_state.dest_coords
 
-# 4. If "Flight" is selected and both coords exist, let user pick airport from dropdown
+# 4. Flight: Show dropdowns for airport selection if both coords exist
 if "Flight" in transport_modes and origin_coords and dest_coords:
-    # Get airports near both
     airports_from = get_airports_by_coords(origin_coords[0], origin_coords[1])
     airports_to = get_airports_by_coords(dest_coords[0], dest_coords[1])
+    st.session_state.flight_origin_airport = None
+    st.session_state.flight_dest_airport = None
     if airports_from:
         st.session_state.flight_origin_airport = st.selectbox(
-            "Select Departure Airport", airports_from, format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="origin_airport_select")
+            "Select Departure Airport", airports_from,
+            format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="origin_airport_select"
+        )
     if airports_to:
         st.session_state.flight_dest_airport = st.selectbox(
-            "Select Arrival Airport", airports_to, format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="dest_airport_select")
+            "Select Arrival Airport", airports_to,
+            format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="dest_airport_select"
+        )
 
 if st.button("Find Routes"):
     st.session_state.run_triggered = True
@@ -131,9 +143,8 @@ if st.session_state.run_triggered and origin_coords and dest_coords:
                 results.append(("Drive (no tolls)", nontolled_route["duration_mins"], nontolled_route["distance_miles"], gas_cost))
 
         if "Flight" in transport_modes:
-            # Only run if airport choices exist
+            # Only run if both airports are selected
             if st.session_state.flight_origin_airport and st.session_state.flight_dest_airport:
-                # Use IATA codes directly
                 flights, error = get_flights(
                     st.session_state.flight_origin_airport["iataCode"],
                     st.session_state.flight_dest_airport["iataCode"]
@@ -166,11 +177,17 @@ if st.session_state.run_triggered and origin_coords and dest_coords:
         if tolled_route:
             with cols[0]:
                 st.markdown("#### Drive (with tolls)")
-                map_tolled = show_map_with_route(origin_coords, dest_coords, tolled_route["polyline"], tolled_route["steps"], "With Tolls")
+                map_tolled = show_map_with_route(
+                    origin_coords, dest_coords,
+                    tolled_route["polyline"], tolled_route["steps"], "With Tolls"
+                )
                 st_folium(map_tolled, width=700, height=400)
 
         if nontolled_route:
             with cols[1 if tolled_route else 0]:
                 st.markdown("#### Drive (no tolls)")
-                map_nontolled = show_map_with_route(origin_coords, dest_coords, nontolled_route["polyline"], nontolled_route["steps"], "No Tolls")
+                map_nontolled = show_map_with_route(
+                    origin_coords, dest_coords,
+                    nontolled_route["polyline"], nontolled_route["steps"], "No Tolls"
+                )
                 st_folium(map_nontolled, width=700, height=400)
