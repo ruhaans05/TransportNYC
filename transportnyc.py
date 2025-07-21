@@ -379,7 +379,7 @@ if st.session_state.run_triggered and origin_coords and dest_coords:
 # --- HustlerAI Toolbar on the right ---
 
 if st.session_state.get("username"):
-    with st.expander("🤖 HustlerAI — Ask Route or Travel Questions", expanded=True):
+    with st.expander("🤖 HustlerAI — Ask Route or Travel Questions to our AI Companion!", expanded=True):
         st.markdown("Chat with HustlerAI! Ask about your drive, stops, traffic, flights, NYC, or anything else. This is private AI, not a human.")
         # Gather context string for current planned route (if you want smarter answers)
         context = ""
