@@ -1,6 +1,6 @@
 streamlit
-requests
-googlemaps
+openai
 folium
 streamlit-folium
 polyline
+requests
