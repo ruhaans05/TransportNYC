@@ -307,34 +307,37 @@ with main_col:
                             st.write(f"• {f['from']} → {f['to']} | Airline: {f['airline']} | Duration: {f['duration']} | Price: ${f['price']}")
 
         if results:
+            for mode, time, distance, cost in results:
+                st.markdown(f"### 🚀 {mode}")
+                st.write(f"**Time:** {time:.1f} minutes")
+                if distance is not None:
+                    st.write(f"**Distance:** {distance:.2f} miles")
+                label = "Approx. Gas Cost" if "Drive" in mode else "Fare"
+                st.write(f"**{label}:** ${cost:.2f}")
+
             st.markdown("### 🗺 Route Maps")
             cols = st.columns(2 if (tolled_route and nontolled_route) else 1)
             if tolled_route:
                 with cols[0]:
                     st.markdown("#### Drive (with tolls)")
-                    # Build the route summary
-                    summary = f"Drive (with tolls):<br>Time: {tolled_route['duration_mins']:.1f} mins<br>Distance: {tolled_route['distance_miles']:.2f} miles<br>Gas: ${estimate_gas_cost(tolled_route['distance_miles'], mpg_val):.2f}"
                     map_tolled = show_map_with_route(
                         origin_coords, dest_coords,
-                        tolled_route["polyline"], tolled_route["steps"], "With Tolls",
-                        route_summary=summary
+                        tolled_route["polyline"], tolled_route["steps"], "With Tolls"
                     )
-                    st_folium(map_tolled, width=850, height=400)
+                    st_folium(map_tolled, width=700, height=400)
+
             if nontolled_route:
                 with cols[1 if tolled_route else 0]:
                     st.markdown("#### Drive (no tolls)")
-                    summary = f"Drive (no tolls):<br>Time: {nontolled_route['duration_mins']:.1f} mins<br>Distance: {nontolled_route['distance_miles']:.2f} miles<br>Gas: ${estimate_gas_cost(nontolled_route['distance_miles'], mpg_val):.2f}"
                     map_nontolled = show_map_with_route(
                         origin_coords, dest_coords,
-                        nontolled_route["polyline"], nontolled_route["steps"], "No Tolls",
-                        route_summary=summary
+                        nontolled_route["polyline"], nontolled_route["steps"], "No Tolls"
                     )
-                    st_folium(map_nontolled, width=850, height=400)
-
+                    st_folium(map_nontolled, width=700, height=400)
 
 # ================= RIGHT TOOLBAR: HustlerAI =========================
 with ai_col:
-    st.markdown("## 🤖 HustlerAI\nAsk any route/travel question to our AI Companion!")
+    st.markdown("## 🤖 HustlerAI\nAsk any route/travel/NYC question to your AI Companion!")
     import openai
     def ask_hustlerai(question, context=None):
         openai.api_key = st.secrets["OPENAI_API_KEY"]
