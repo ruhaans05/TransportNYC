@@ -6,7 +6,7 @@ import polyline as pl
 from datetime import datetime
 
 from google_maps import get_driving_route
-from flight_data import get_flights
+from flight_data import get_flights, get_airports_by_coords  # need to add this
 
 GAS_PRICE = 3.140
 
@@ -52,7 +52,7 @@ def format_coords(coords):
     return f"{coords[0]},{coords[1]}"
 
 # Initialize session state
-for key in ["origin_coords", "dest_coords", "run_triggered"]:
+for key in ["origin_coords", "dest_coords", "run_triggered", "flight_origin_airport", "flight_dest_airport"]:
     if key not in st.session_state:
         st.session_state[key] = None if key != "run_triggered" else False
 
@@ -60,72 +60,96 @@ st.set_page_config(page_title="TransportNYC", layout="centered")
 st.title("🚦 Hustler")
 st.subheader("Optimize your routes for cost, gas, and time")
 
-# MPG prompt is now above entry points
+# --- UI Section ---
+
+# 1. MPG input (top)
 mpg_input = st.text_input("Optional: Enter your vehicle's mpg:", value="")
 try:
     mpg_val = float(mpg_input)
     if mpg_val <= 0:
         raise ValueError
 except:
-    mpg_val = 22  # Default if blank/invalid
+    mpg_val = 22
 
-origin_query = st.text_input("Starting Point", key="origin_input")
-destination_query = st.text_input("Destination", key="dest_input")
-
+# 2. Transport mode choice (moved up)
 transport_modes = st.multiselect("Compare transport modes", [
     "Drive (with tolls)",
     "Drive (no tolls)",
     "Flight"
 ], default=["Drive (no tolls)"])
 
+# 3. Location selection
+origin_query = st.text_input("Starting Point", key="origin_input")
+destination_query = st.text_input("Destination", key="dest_input")
+
+origin_coords = None
+dest_coords = None
+
 if origin_query and len(origin_query) >= 3:
     origin_opts = get_place_suggestions(origin_query)
     if origin_opts:
         st.session_state.origin_coords = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")["value"]
+        origin_coords = st.session_state.origin_coords
 
 if destination_query and len(destination_query) >= 3:
     dest_opts = get_place_suggestions(destination_query)
     if dest_opts:
         st.session_state.dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
+        dest_coords = st.session_state.dest_coords
+
+# 4. If "Flight" is selected and both coords exist, let user pick airport from dropdown
+if "Flight" in transport_modes and origin_coords and dest_coords:
+    # Get airports near both
+    airports_from = get_airports_by_coords(origin_coords[0], origin_coords[1])
+    airports_to = get_airports_by_coords(dest_coords[0], dest_coords[1])
+    if airports_from:
+        st.session_state.flight_origin_airport = st.selectbox(
+            "Select Departure Airport", airports_from, format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="origin_airport_select")
+    if airports_to:
+        st.session_state.flight_dest_airport = st.selectbox(
+            "Select Arrival Airport", airports_to, format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="dest_airport_select")
 
 if st.button("Find Routes"):
     st.session_state.run_triggered = True
 
-if st.session_state.run_triggered and st.session_state.origin_coords and st.session_state.dest_coords:
-    origin = st.session_state.origin_coords
-    destination = st.session_state.dest_coords
+if st.session_state.run_triggered and origin_coords and dest_coords:
     results = []
-
     with st.spinner("Fetching route data..."):
         tolled_route = None
         nontolled_route = None
 
         if "Drive (with tolls)" in transport_modes:
-            tolled_route = get_driving_route(format_coords(origin), format_coords(destination), avoid_tolls=False)
+            tolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=False)
             if tolled_route:
                 gas_cost = estimate_gas_cost(tolled_route["distance_miles"], mpg_val)
                 results.append(("Drive (with tolls)", tolled_route["duration_mins"], tolled_route["distance_miles"], gas_cost))
 
         if "Drive (no tolls)" in transport_modes:
-            nontolled_route = get_driving_route(format_coords(origin), format_coords(destination), avoid_tolls=True)
+            nontolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=True)
             if nontolled_route:
                 gas_cost = estimate_gas_cost(nontolled_route["distance_miles"], mpg_val)
                 results.append(("Drive (no tolls)", nontolled_route["duration_mins"], nontolled_route["distance_miles"], gas_cost))
 
         if "Flight" in transport_modes:
-            flights, error = get_flights(origin, destination)
-            if error:
-                st.write(f"✈️ Airport error: {error}")
-            elif not flights:
-                date_str = datetime.utcnow().strftime("%Y-%m-%d")
-                origin_txt = origin_query.replace(" ", "+")
-                dest_txt = destination_query.replace(" ", "+")
-                link = f"https://www.google.com/travel/flights?q=flights+from+{origin_txt}+to+{dest_txt}+on+{date_str}"
-                st.markdown(f"✈️ No flights found. [Search on Google Flights]({link})")
-            else:
-                st.markdown("### ✈️ Flight Options")
-                for f in flights:
-                    st.write(f"• {f['from']} → {f['to']} | Airline: {f['airline']} | Duration: {f['duration']} | Price: ${f['price']}")
+            # Only run if airport choices exist
+            if st.session_state.flight_origin_airport and st.session_state.flight_dest_airport:
+                # Use IATA codes directly
+                flights, error = get_flights(
+                    st.session_state.flight_origin_airport["iataCode"],
+                    st.session_state.flight_dest_airport["iataCode"]
+                )
+                if error:
+                    st.write(f"✈️ Airport error: {error}")
+                elif not flights:
+                    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+                    origin_txt = st.session_state.flight_origin_airport["iataCode"]
+                    dest_txt = st.session_state.flight_dest_airport["iataCode"]
+                    link = f"https://www.google.com/travel/flights?q=flights+from+{origin_txt}+to+{dest_txt}+on+{date_str}"
+                    st.markdown(f"✈️ No flights found. [Search on Google Flights]({link})")
+                else:
+                    st.markdown("### ✈️ Flight Options")
+                    for f in flights:
+                        st.write(f"• {f['from']} → {f['to']} | Airline: {f['airline']} | Duration: {f['duration']} | Price: ${f['price']}")
 
     if results:
         for mode, time, distance, cost in results:
@@ -142,11 +166,11 @@ if st.session_state.run_triggered and st.session_state.origin_coords and st.sess
         if tolled_route:
             with cols[0]:
                 st.markdown("#### Drive (with tolls)")
-                map_tolled = show_map_with_route(origin, destination, tolled_route["polyline"], tolled_route["steps"], "With Tolls")
+                map_tolled = show_map_with_route(origin_coords, dest_coords, tolled_route["polyline"], tolled_route["steps"], "With Tolls")
                 st_folium(map_tolled, width=700, height=400)
 
         if nontolled_route:
             with cols[1 if tolled_route else 0]:
                 st.markdown("#### Drive (no tolls)")
-                map_nontolled = show_map_with_route(origin, destination, nontolled_route["polyline"], nontolled_route["steps"], "No Tolls")
+                map_nontolled = show_map_with_route(origin_coords, dest_coords, nontolled_route["polyline"], nontolled_route["steps"], "No Tolls")
                 st_folium(map_nontolled, width=700, height=400)
