@@ -86,7 +86,7 @@ else:
 st.sidebar.header("💬 Global & Private Chat")
 
 msg = st.sidebar.text_input(
-    "Send a message (prefix with @username for private):",
+    "Send a message (prefix with @username for private):\nThis global chatting feature allows you to ask questions about this app, your routes, and other travel info.",
     key="msg_input"
 )
 
@@ -141,7 +141,7 @@ if st.session_state.username:
                     unsafe_allow_html=True
                 )
 else:
-    st.sidebar.info("Login to chat!")
+    st.sidebar.info("Reload to login and chat!")
 
 # --------- (Rest of your app goes below, e.g., route planner etc.) ----------
 
