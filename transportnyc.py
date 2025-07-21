@@ -151,7 +151,7 @@ main_col, ai_col = st.columns([3, 1])  # 3:1 ratio for main/app and rightbar
 
 with main_col:
     st.set_page_config(page_title="TransportNYC", layout="centered")
-    st.title("🚦 Hustler")
+    st.title("🚦 Router")
     st.subheader("Optimize your routes for cost, gas, and time")
 
     # ------ YOUR ORIGINAL LOGIC HERE --------------
@@ -337,7 +337,7 @@ with main_col:
 
 # ================= RIGHT TOOLBAR: HustlerAI =========================
 with ai_col:
-    st.markdown("## 🤖 HustlerAI\nAsk any route/travel questions to our AI Companion!")
+    st.markdown("## 🤖 RouterAI\nAsk any route/travel questions to our AI Companion!")
     import openai
     def ask_hustlerai(question, context=None):
         openai.api_key = st.secrets["OPENAI_API_KEY"]
@@ -362,12 +362,12 @@ with ai_col:
         context = ""
         if "origin_coords" in st.session_state and "dest_coords" in st.session_state:
             context = f"Origin: {st.session_state.origin_coords}, Destination: {st.session_state.dest_coords}."
-        ai_question = st.text_area("Ask HustlerAI about your trip, routes, or planning!", key="hustlerai_input_area")
+        ai_question = st.text_area("Ask RouterAI about your trip, routes, or planning!", key="hustlerai_input_area")
         if st.button("Ask HustlerAI", key="hustlerai_btn"):
             if ai_question.strip():
-                with st.spinner("HustlerAI is thinking..."):
+                with st.spinner("RouterAI is thinking..."):
                     ai_reply = ask_hustlerai(ai_question, context)
                     st.success(f"**HustlerAI:** {ai_reply}")
     else:
-        st.info("Login to use HustlerAI.")
+        st.info("Login to use RouterAI.")
 
