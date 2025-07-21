@@ -63,7 +63,7 @@ st.subheader("Optimize your routes for cost, gas, and time")
 
 # 1. Transport mode selection
 transport_modes = st.multiselect(
-    "Compare transport modes", [
+    "Choose transport modes", [
         "Drive (with tolls)",
         "Drive (no tolls)",
         "Flight"
