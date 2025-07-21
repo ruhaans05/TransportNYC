@@ -1,13 +1,19 @@
 import googlemaps
-import os
 import streamlit as st
 
 gmaps = googlemaps.Client(key=st.secrets["GCP_API_KEY"])
 
+def format_coords(coords):
+    # coords is expected as a tuple: (lat, lon)
+    return f"{coords[0]},{coords[1]}"
+
 def get_driving_route(origin, destination, avoid_tolls=False):
+    origin_str = format_coords(origin)
+    destination_str = format_coords(destination)
+
     directions = gmaps.directions(
-        origin,
-        destination,
+        origin_str,
+        destination_str,
         mode="driving",
         avoid="tolls" if avoid_tolls else None,
         departure_time="now"
@@ -23,18 +29,26 @@ def get_driving_route(origin, destination, avoid_tolls=False):
     }
 
 def get_transit_route(origin, destination):
+    origin_str = format_coords(origin)
+    destination_str = format_coords(destination)
+
     directions = gmaps.directions(
-        origin,
-        destination,
+        origin_str,
+        destination_str,
         mode="transit",
         departure_time="now"
     )
     if not directions:
         return None
     leg = directions[0]["legs"][0]
+
+    fare_info = leg.get("fare", {})
+    fare_value = fare_info.get("value") if fare_info else None
+    fare_currency = fare_info.get("currency") if fare_info else "USD"
+
     return {
         "duration_mins": leg["duration"]["value"] / 60,
-        "fare": leg.get("fare", {}).get("value", None),
-        "currency": leg.get("fare", {}).get("currency", "USD"),
+        "fare": fare_value,
+        "currency": fare_currency,
         "steps": leg["steps"]
     }
