@@ -196,7 +196,7 @@ with main_col:
         "Drive (with tolls)", "Drive (no tolls)"
     ], default=["Drive (no tolls)"])
 
-    use_live_traffic = st.toggle("Show Live Traffic Conditions", value=True)
+    use_live_traffic = True
 
     mpg_input = st.text_input("Optional: Enter your vehicle's mpg:", value="")
     try:
