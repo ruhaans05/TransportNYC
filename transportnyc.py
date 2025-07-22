@@ -15,6 +15,93 @@ CHAT_FILE = "chat.json"
 
 # ... [PREVIOUS CONTENT FROM PART 1 REMAINS UNCHANGED] ...
 
+def load_json(filename, default):
+    if os.path.exists(filename):
+        with open(filename, "r") as f:
+            return json.load(f)
+    return default
+
+def save_json(filename, obj):
+    with open(filename, "w") as f:
+        json.dump(obj, f, indent=2)
+
+def hash_pw(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+users = load_json(USERS_FILE, [])
+chat_log = load_json(CHAT_FILE, [])
+
+if users and isinstance(users[0], str):
+    users = [{"username": u, "password": ""} for u in users]
+    save_json(USERS_FILE, users)
+
+def get_user_obj(username, users_list=None):
+    if users_list is None:
+        users_list = users
+    for user in users_list:
+        if user["username"] == username:
+            return user
+
+# ================= MAIN APP COLUMN LAYOUT =====================
+st.set_page_config(page_title="TransportNYC", layout="centered")
+main_col, ai_col = st.columns([3, 1])
+
+# ================= LOGIN & ACCOUNT MANAGEMENT =================
+with st.sidebar:
+    st.header("👤 Account")
+    if "username" not in st.session_state:
+        login_tab, signup_tab = st.tabs(["Login", "Create Account"])
+
+        with login_tab:
+            login_user = st.text_input("Username", key="login_user")
+            login_pass = st.text_input("Password", type="password", key="login_pass")
+            if st.button("Login"):
+                user = get_user_obj(login_user)
+                if user and user["password"] == hash_pw(login_pass):
+                    st.session_state.username = login_user
+                    st.success(f"Welcome back, {login_user}!")
+                else:
+                    st.error("Invalid credentials")
+
+        with signup_tab:
+            new_user = st.text_input("New Username", key="signup_user")
+            new_pass = st.text_input("New Password", type="password", key="signup_pass")
+            if st.button("Create Account"):
+                if get_user_obj(new_user):
+                    st.error("Username already exists")
+                else:
+                    users.append({"username": new_user, "password": hash_pw(new_pass)})
+                    save_json(USERS_FILE, users)
+                    st.success("Account created. Please log in.")
+    else:
+        st.write(f"👋 Logged in as `{st.session_state.username}`")
+        if st.button("Logout"):
+            del st.session_state["username"]
+
+# ================= CHAT (OPTIONAL) ====================
+if "username" in st.session_state:
+    with st.sidebar:
+        st.header("💬 Chat")
+        st.write("Public or private messages")
+        chat_mode = st.radio("Mode", ["Global", "Private"])
+        message = st.text_input("Message")
+        if st.button("Send") and message.strip():
+            chat_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "sender": st.session_state.username,
+                "mode": chat_mode,
+                "message": message.strip()
+            }
+            chat_log.append(chat_entry)
+            save_json(CHAT_FILE, chat_log)
+        st.write("### 📜 Recent Messages:")
+        for c in reversed(chat_log[-10:]):
+            if c["mode"] == "Global" or (c["mode"] == "Private" and c["sender"] == st.session_state.username):
+                ts = datetime.fromisoformat(c["timestamp"]).strftime("%Y-%m-%d %H:%M")
+                st.write(f"`{ts}` **{c['sender']}**: {c['message']}")
+
+
+
 # ================= MAIN APP COLUMN LAYOUT =====================
 st.set_page_config(page_title="TransportNYC", layout="centered")
 main_col, ai_col = st.columns([3, 1])
