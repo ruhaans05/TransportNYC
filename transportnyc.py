@@ -224,7 +224,7 @@ with main_col:
             dest_coords = st.session_state.dest_coords
 
     if st.button("Find Routes"):
-        st.session_state.run_triggered = True
+        st.session_state.run_triggered = False
 
     if st.session_state.run_triggered and origin_coords and dest_coords:
         results = []
