@@ -225,7 +225,9 @@ with main_col:
         submit = st.form_submit_button("Find Routes")
 
 
-    if submit and origin_coords and dest_coords:
+    if submit:
+        st.session_state.run_triggered = True
+    if st.session_state.run_triggered and origin_coords and dest_coords:
         results = []
         with st.spinner("Fetching route data..."):
             tolled_route = None
