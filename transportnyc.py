@@ -28,7 +28,6 @@ def hash_pw(password):
 users = load_json(USERS_FILE, [])
 chat_log = load_json(CHAT_FILE, [])
 
-# --- MIGRATION: Convert old user list to dict format ---
 if users and isinstance(users[0], str):
     users = [{"username": u, "password": ""} for u in users]
     save_json(USERS_FILE, users)
@@ -146,7 +145,6 @@ with st.sidebar:
         st.info("Reload to login and chat!")
 
 # ================= MAIN APP COLUMN LAYOUT =====================
-# Main section in center, AI assistant on right!
 main_col, ai_col = st.columns([3, 1])  # 3:1 ratio for main/app and rightbar
 
 with main_col:
@@ -154,7 +152,6 @@ with main_col:
     st.title("🚦 Router")
     st.subheader("Optimize your routes for cost, gas, and time")
 
-    # ------ YOUR ORIGINAL LOGIC HERE --------------
     GAS_PRICE = 3.140
 
     def estimate_gas_cost(miles, mpg):
@@ -197,8 +194,7 @@ with main_col:
         return f"{coords[0]},{coords[1]}"
 
     for key in [
-        "origin_coords", "dest_coords", "run_triggered",
-        "flight_origin_airport", "flight_dest_airport"
+        "origin_coords", "dest_coords", "run_triggered"
     ]:
         if key not in st.session_state:
             st.session_state[key] = None if key != "run_triggered" else False
@@ -208,7 +204,6 @@ with main_col:
         "Choose transport modes", [
             "Drive (with tolls)",
             "Drive (no tolls)",
-            "Flight"
         ],
         default=["Drive (no tolls)"]
     )
@@ -246,25 +241,6 @@ with main_col:
             )["value"]
             dest_coords = st.session_state.dest_coords
 
-    # 4. Flight: Show dropdowns for airport selection if both coords exist
-    from google_maps import get_driving_route
-    from flight_data import get_flights, get_airports_by_coords
-    if "Flight" in transport_modes and origin_coords and dest_coords:
-        airports_from = get_airports_by_coords(origin_coords[0], origin_coords[1])
-        airports_to = get_airports_by_coords(dest_coords[0], dest_coords[1])
-        st.session_state.flight_origin_airport = None
-        st.session_state.flight_dest_airport = None
-        if airports_from:
-            st.session_state.flight_origin_airport = st.selectbox(
-                "Select Departure Airport", airports_from,
-                format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="origin_airport_select"
-            )
-        if airports_to:
-            st.session_state.flight_dest_airport = st.selectbox(
-                "Select Arrival Airport", airports_to,
-                format_func=lambda x: f"{x['name']} ({x['iataCode']})", key="dest_airport_select"
-            )
-
     if st.button("Find Routes"):
         st.session_state.run_triggered = True
 
@@ -273,6 +249,8 @@ with main_col:
         with st.spinner("Fetching route data..."):
             tolled_route = None
             nontolled_route = None
+
+            from google_maps import get_driving_route  # <-- Make sure your module is implemented for OSRM!
 
             if "Drive (with tolls)" in transport_modes:
                 tolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=False)
@@ -286,33 +264,13 @@ with main_col:
                     gas_cost = estimate_gas_cost(nontolled_route["distance_miles"], mpg_val)
                     results.append(("Drive (no tolls)", nontolled_route["duration_mins"], nontolled_route["distance_miles"], gas_cost))
 
-            if "Flight" in transport_modes:
-                # Only run if both airports are selected
-                if st.session_state.flight_origin_airport and st.session_state.flight_dest_airport:
-                    flights, error = get_flights(
-                        st.session_state.flight_origin_airport["iataCode"],
-                        st.session_state.flight_dest_airport["iataCode"]
-                    )
-                    if error:
-                        st.write(f"✈️ Airport error: {error}")
-                    elif not flights:
-                        date_str = datetime.utcnow().strftime("%Y-%m-%d")
-                        origin_txt = st.session_state.flight_origin_airport["iataCode"]
-                        dest_txt = st.session_state.flight_dest_airport["iataCode"]
-                        link = f"https://www.google.com/travel/flights?q=flights+from+{origin_txt}+to+{dest_txt}+on+{date_str}"
-                        st.markdown(f"✈️ No flights found. [Search on Google Flights]({link})")
-                    else:
-                        st.markdown("### ✈️ Flight Options")
-                        for f in flights:
-                            st.write(f"• {f['from']} → {f['to']} | Airline: {f['airline']} | Duration: {f['duration']} | Price: ${f['price']}")
-
         if results:
             for mode, time, distance, cost in results:
                 st.markdown(f"### 🚀 {mode}")
                 st.write(f"**Time:** {time:.1f} minutes")
                 if distance is not None:
                     st.write(f"**Distance:** {distance:.2f} miles")
-                label = "Approx. Gas Cost" if "Drive" in mode else "Fare"
+                label = "Approx. Gas Cost"
                 st.write(f"**{label}:** ${cost:.2f}")
 
             st.markdown("### 🗺 Route Maps")
@@ -341,9 +299,9 @@ with ai_col:
     import openai
 
     openai.api_key = st.secrets["OPENAI_API_KEY"]
-    
+
     def ask_hustlerai(question, context=None):
-        system = "You are HustlerAI, a friendly and knowledgeable NYC transportation assistant. Answer user questions clearly and accurately. You know about driving, flights, gas prices, travel time, and trip planning."
+        system = "You are HustlerAI, a friendly and knowledgeable NYC transportation assistant. Answer user questions clearly and accurately. You know about driving, gas prices, travel time, and trip planning."
         if context:
             system += f" The current route or plan context is: {context}"
         try:
@@ -360,7 +318,6 @@ with ai_col:
         except Exception as e:
             return f"Error from RouterAI: {e}"
 
-
     if st.session_state.get("username"):
         context = ""
         if "origin_coords" in st.session_state and "dest_coords" in st.session_state:
@@ -373,4 +330,3 @@ with ai_col:
                     st.success(f"**HustlerAI:** {ai_reply}")
     else:
         st.info("Login to use RouterAI.")
-
