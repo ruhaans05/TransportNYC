@@ -13,8 +13,6 @@ from openrouteservice_api import get_driving_route, get_interval_coords, search_
 USERS_FILE = "users.json"
 CHAT_FILE = "chat.json"
 
-# ... [PREVIOUS CONTENT FROM PART 1 REMAINS UNCHANGED] ...
-
 def load_json(filename, default):
     if os.path.exists(filename):
         with open(filename, "r") as f:
@@ -96,7 +94,7 @@ if "username" in st.session_state:
             save_json(CHAT_FILE, chat_log)
         st.write("### 📜 Recent Messages:")
         for c in reversed(chat_log[-10:]):
-            if c["mode"] == "Global" or (c["mode"] == "Private" and c["sender"] == st.session_state.username):
+            if c.get("mode") == "Global" or (c.get("mode") == "Private" and c.get("sender") == st.session_state.username):
                 ts = datetime.fromisoformat(c["timestamp"]).strftime("%Y-%m-%d %H:%M")
                 st.write(f"`{ts}` **{c['sender']}**: {c['message']}")
 
