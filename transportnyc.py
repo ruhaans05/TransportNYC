@@ -193,36 +193,36 @@ with main_col:
             st.session_state[key] = None if key != "run_triggered" else False
 
     with st.form(key="route_form"):
-    transport_modes = st.multiselect("Choose transport modes", [
-        "Drive (with tolls)", "Drive (no tolls)"
-    ], default=["Drive (no tolls)"])
+        transport_modes = st.multiselect("Choose transport modes", [
+            "Drive (with tolls)", "Drive (no tolls)"
+        ], default=["Drive (no tolls)"])
 
-    mpg_input = st.text_input("Optional: Enter your vehicle's mpg:", value="")
-    try:
-        mpg_val = float(mpg_input)
-        if mpg_val <= 0:
-            raise ValueError
-    except:
-        mpg_val = 22
+        mpg_input = st.text_input("Optional: Enter your vehicle's mpg:", value="")
+        try:
+            mpg_val = float(mpg_input)
+            if mpg_val <= 0:
+                raise ValueError
+        except:
+            mpg_val = 22
 
-    origin_query = st.text_input("Starting Point", key="origin_input")
-    destination_query = st.text_input("Destination", key="dest_input")
+        origin_query = st.text_input("Starting Point", key="origin_input")
+        destination_query = st.text_input("Destination", key="dest_input")
+    
+        origin_coords, dest_coords = None, None
+    
+        if origin_query and len(origin_query) >= 3:
+            origin_opts = get_place_suggestions(origin_query)
+            if origin_opts:
+                st.session_state.origin_coords = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")["value"]
+                origin_coords = st.session_state.origin_coords
+    
+        if destination_query and len(destination_query) >= 3:
+            dest_opts = get_place_suggestions(destination_query)
+            if dest_opts:
+                st.session_state.dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
+                dest_coords = st.session_state.dest_coords
 
-    origin_coords, dest_coords = None, None
-
-    if origin_query and len(origin_query) >= 3:
-        origin_opts = get_place_suggestions(origin_query)
-        if origin_opts:
-            st.session_state.origin_coords = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")["value"]
-            origin_coords = st.session_state.origin_coords
-
-    if destination_query and len(destination_query) >= 3:
-        dest_opts = get_place_suggestions(destination_query)
-        if dest_opts:
-            st.session_state.dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
-            dest_coords = st.session_state.dest_coords
-
-    submit = st.form_submit_button("Find Routes")
+        submit = st.form_submit_button("Find Routes")
 
 
     if submit and origin_coords and dest_coords:
