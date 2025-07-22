@@ -7,6 +7,7 @@ import requests
 import folium
 from streamlit_folium import st_folium
 import polyline as pl
+import time
 from openrouteservice_api import get_driving_route, get_interval_coords, search_nearby_pois
 
 # ================= USER & CHAT SYSTEM ====================
