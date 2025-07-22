@@ -103,14 +103,22 @@ if "username" in st.session_state:
 
         st.write("### 📜 Recent Messages:")
         for c in reversed(chat_log[-20:]):
+            if not c.get("message") or not c.get("sender"):
+                continue  # skip malformed entries
+        
             is_global = c.get("recipient") is None
             is_private_to_me = c.get("recipient") == st.session_state.username
             is_sent_by_me = c.get("sender") == st.session_state.username
-
+        
             if is_global or is_private_to_me or is_sent_by_me:
-                ts = datetime.fromisoformat(c["timestamp"]).strftime("%Y-%m-%d %H:%M")
+                ts = c.get("timestamp", "")
+                try:
+                    ts_fmt = datetime.fromisoformat(ts).strftime("%Y-%m-%d %H:%M") if ts else "Unknown time"
+                except:
+                    ts_fmt = "Invalid time"
                 prefix = "🔒 " if c.get("recipient") else ""
-                st.write(f"`{ts}` {prefix}**{c['sender']}**: {c['message']}")
+                st.write(f"`{ts_fmt}` {prefix}**{c['sender']}**: {c['message']}")
+
 
 
 
