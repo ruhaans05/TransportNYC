@@ -192,11 +192,10 @@ with main_col:
         if key not in st.session_state:
             st.session_state[key] = None if key != "run_triggered" else False
 
+    with st.form(key="route_form"):
     transport_modes = st.multiselect("Choose transport modes", [
         "Drive (with tolls)", "Drive (no tolls)"
     ], default=["Drive (no tolls)"])
-
-    use_live_traffic = True
 
     mpg_input = st.text_input("Optional: Enter your vehicle's mpg:", value="")
     try:
@@ -223,10 +222,10 @@ with main_col:
             st.session_state.dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
             dest_coords = st.session_state.dest_coords
 
-    if st.button("Find Routes"):
-        st.session_state.run_triggered = True
+    submit = st.form_submit_button("Find Routes")
 
-    if st.session_state.run_triggered and origin_coords and dest_coords:
+
+    if submit and origin_coords and dest_coords:
         results = []
         with st.spinner("Fetching route data..."):
             tolled_route = None
