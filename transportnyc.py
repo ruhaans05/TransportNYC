@@ -339,13 +339,15 @@ with main_col:
 with ai_col:
     st.markdown("## 🤖 RouterAI\nAsk any route/travel questions to our AI Companion!")
     import openai
+
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+    
     def ask_hustlerai(question, context=None):
-        openai.api_key = st.secrets["OPENAI_API_KEY"]
         system = "You are HustlerAI, a friendly and knowledgeable NYC transportation assistant. Answer user questions clearly and accurately. You know about driving, flights, gas prices, travel time, and trip planning."
         if context:
             system += f" The current route or plan context is: {context}"
         try:
-            resp = openai.chat.completions.create(
+            resp = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": system},
@@ -356,14 +358,15 @@ with ai_col:
             )
             return resp.choices[0].message.content.strip()
         except Exception as e:
-            return f"Error from HustlerAI: {e}"
+            return f"Error from RouterAI: {e}"
+
 
     if st.session_state.get("username"):
         context = ""
         if "origin_coords" in st.session_state and "dest_coords" in st.session_state:
             context = f"Origin: {st.session_state.origin_coords}, Destination: {st.session_state.dest_coords}."
         ai_question = st.text_area("Ask RouterAI about your trip, routes, or planning!", key="hustlerai_input_area")
-        if st.button("Ask HustlerAI", key="hustlerai_btn"):
+        if st.button("Ask RouterAI", key="hustlerai_btn"):
             if ai_question.strip():
                 with st.spinner("RouterAI is thinking..."):
                     ai_reply = ask_hustlerai(ai_question, context)
