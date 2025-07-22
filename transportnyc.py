@@ -136,20 +136,23 @@ with main_col:
     def estimate_gas_cost(miles, mpg):
         return round((miles / mpg) * GAS_PRICE, 2)
 
+    LOCATIONIQ_KEY = st.secrets["LOCATIONIQ_KEY"]  # Store it in .streamlit/secrets.toml
+
     def get_place_suggestions(query):
         try:
-            res = requests.get("https://geocode.maps.co/search", params={
+            res = requests.get("https://us1.locationiq.com/v1/search.php", params={
+                "key": LOCATIONIQ_KEY,
                 "q": query,
+                "format": "json",
                 "limit": 5
-            }, headers={"User-Agent": "TransportNYC-App"})
+            })
             res.raise_for_status()
             raw = res.json()
-            if not raw:
-                return []
             return [{"label": i["display_name"], "value": (float(i["lat"]), float(i["lon"]))} for i in raw]
         except Exception as e:
             st.error(f"Geocoding failed: {e}")
             return []
+
 
 
 
