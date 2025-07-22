@@ -154,20 +154,24 @@ with main_col:
         return list(set(highways))[:6]
 
     def show_map_with_route(start_coords, end_coords, polyline_str, steps, label, color="blue"):
-        m = folium.Map(location=[(start_coords[0] + end_coords[0]) / 2,
-                                 (start_coords[1] + end_coords[1]) / 2], zoom_start=11)
+        m = folium.Map()
+        m.fit_bounds([start_coords, end_coords])
+    
         folium.Marker(start_coords, tooltip="Start", icon=folium.Icon(color="green")).add_to(m)
         folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
+    
         points = pl.decode(polyline_str)
         folium.PolyLine(points, color=color, weight=5, opacity=0.7).add_to(m)
-
+    
         highways = extract_highways_from_steps(steps)
         if highways:
             folium.Marker(
                 location=start_coords,
                 icon=folium.DivIcon(html=f'<div style="font-size: 10pt">{label} uses:<br>' + "<br>".join(highways) + '</div>')
             ).add_to(m)
+    
         return m
+
 
     for key in ["origin_coords", "dest_coords", "run_triggered", "tolled_route", "nontolled_route", "results"]:
         if key not in st.session_state:
