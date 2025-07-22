@@ -73,7 +73,7 @@ with st.sidebar:
                     st.success(f"Logged in as {username_input}")
                 else:
                     st.error("Login failed. Invalid username or password.")
-        else:  # Create Account
+        else:
             if st.button("Create Account"):
                 if register_user(username_input, password_input):
                     st.session_state.username = username_input.strip()
@@ -85,18 +85,13 @@ with st.sidebar:
         if st.button("Logout"):
             st.session_state.username = None
 
-    # ---- Chat Section ----
     st.header("💬 Global & Private Chat")
-    msg = st.text_input(
-        "Send a message (prefix with @username for private):\nThis global chatting feature allows you to ask questions about this app, your routes, and other travel info.",
-        key="msg_input"
-    )
+    msg = st.text_input("Send a message (prefix with @username for private):", key="msg_input")
 
     if st.session_state.username and st.button("Send"):
         msg = msg.strip()
         if msg:
             now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            # Private message logic
             if msg.startswith("@") and " " in msg:
                 split_idx = msg.find(" ")
                 target = msg[1:split_idx]
@@ -122,18 +117,16 @@ with st.sidebar:
                 })
                 save_json(CHAT_FILE, chat_log)
 
-    # ---- Chat Display ----
     st.markdown("---")
     st.markdown("### 🗣 Chat Log")
     if st.session_state.username:
-        for chat in chat_log[-100:][::-1]:  # last 100 messages, newest on top
+        for chat in chat_log[-100:][::-1]:
             if chat["type"] == "global":
                 st.markdown(
                     f"**{chat['from']}** <span style='color:gray;font-size:10px'>{chat['dt']}</span><br>{chat['msg']}",
                     unsafe_allow_html=True
                 )
             elif chat["type"] == "private":
-                # Show if you are sender or recipient
                 if chat["to"] == st.session_state.username or chat["from"] == st.session_state.username:
                     pm_target = "(to you)" if chat["to"] == st.session_state.username else f"(to {chat['to']})"
                     st.markdown(
@@ -145,12 +138,14 @@ with st.sidebar:
         st.info("Reload to login and chat!")
 
 # ================= MAIN APP COLUMN LAYOUT =====================
-main_col, ai_col = st.columns([3, 1])  # 3:1 ratio for main/app and rightbar
+main_col, ai_col = st.columns([3, 1])
 
 with main_col:
     st.set_page_config(page_title="TransportNYC", layout="centered")
     st.title("🚦 Router")
     st.subheader("Optimize your routes for cost, gas, and time")
+
+    from google_maps import get_driving_route
 
     GAS_PRICE = 3.140
 
@@ -174,13 +169,13 @@ with main_col:
                 highways.append(instr)
         return list(set(highways))[:6]
 
-    def show_map_with_route(start_coords, end_coords, polyline_str, steps, label):
+    def show_map_with_route(start_coords, end_coords, polyline_str, steps, label, color="blue"):
         m = folium.Map(location=[(start_coords[0] + end_coords[0]) / 2,
                                  (start_coords[1] + end_coords[1]) / 2], zoom_start=11)
         folium.Marker(start_coords, tooltip="Start", icon=folium.Icon(color="green")).add_to(m)
         folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
         points = pl.decode(polyline_str)
-        folium.PolyLine(points, color="blue", weight=5, opacity=0.7).add_to(m)
+        folium.PolyLine(points, color=color, weight=5, opacity=0.7).add_to(m)
 
         highways = extract_highways_from_steps(steps)
         if highways:
@@ -193,31 +188,24 @@ with main_col:
     def format_coords(coords):
         return f"{coords[0]},{coords[1]}"
 
-    for key in [
-        "origin_coords", "dest_coords", "run_triggered"
-    ]:
+    for key in ["origin_coords", "dest_coords", "run_triggered"]:
         if key not in st.session_state:
             st.session_state[key] = None if key != "run_triggered" else False
 
-    # 1. Transport mode selection
-    transport_modes = st.multiselect(
-        "Choose transport modes", [
-            "Drive (with tolls)",
-            "Drive (no tolls)",
-        ],
-        default=["Drive (no tolls)"]
-    )
+    transport_modes = st.multiselect("Choose transport modes", [
+        "Drive (with tolls)", "Drive (no tolls)"
+    ], default=["Drive (no tolls)"])
 
-    # 2. MPG input (AFTER transport mode)
+    use_live_traffic = st.toggle("Show Live Traffic Conditions", value=True)
+
     mpg_input = st.text_input("Optional: Enter your vehicle's mpg:", value="")
     try:
         mpg_val = float(mpg_input)
         if mpg_val <= 0:
             raise ValueError
     except:
-        mpg_val = 22  # Default
+        mpg_val = 22
 
-    # 3. Location selection
     origin_query = st.text_input("Starting Point", key="origin_input")
     destination_query = st.text_input("Destination", key="dest_input")
 
@@ -226,19 +214,13 @@ with main_col:
     if origin_query and len(origin_query) >= 3:
         origin_opts = get_place_suggestions(origin_query)
         if origin_opts:
-            st.session_state.origin_coords = st.selectbox(
-                "Select Start", origin_opts,
-                format_func=lambda x: x["label"], key="origin_select"
-            )["value"]
+            st.session_state.origin_coords = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")["value"]
             origin_coords = st.session_state.origin_coords
 
     if destination_query and len(destination_query) >= 3:
         dest_opts = get_place_suggestions(destination_query)
         if dest_opts:
-            st.session_state.dest_coords = st.selectbox(
-                "Select Destination", dest_opts,
-                format_func=lambda x: x["label"], key="dest_select"
-            )["value"]
+            st.session_state.dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
             dest_coords = st.session_state.dest_coords
 
     if st.button("Find Routes"):
@@ -250,28 +232,25 @@ with main_col:
             tolled_route = None
             nontolled_route = None
 
-            from google_maps import get_driving_route  # <-- Make sure your module is implemented for OSRM!
-
             if "Drive (with tolls)" in transport_modes:
-                tolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=False)
+                tolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=False, use_live_traffic=use_live_traffic)
                 if tolled_route:
                     gas_cost = estimate_gas_cost(tolled_route["distance_miles"], mpg_val)
-                    results.append(("Drive (with tolls)", tolled_route["duration_mins"], tolled_route["distance_miles"], gas_cost))
+                    results.append(("Drive (with tolls)", tolled_route["duration_mins"], tolled_route["distance_miles"], gas_cost, tolled_route["traffic_color"]))
 
             if "Drive (no tolls)" in transport_modes:
-                nontolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=True)
+                nontolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=True, use_live_traffic=use_live_traffic)
                 if nontolled_route:
                     gas_cost = estimate_gas_cost(nontolled_route["distance_miles"], mpg_val)
-                    results.append(("Drive (no tolls)", nontolled_route["duration_mins"], nontolled_route["distance_miles"], gas_cost))
+                    results.append(("Drive (no tolls)", nontolled_route["duration_mins"], nontolled_route["distance_miles"], gas_cost, nontolled_route["traffic_color"]))
 
         if results:
-            for mode, time, distance, cost in results:
+            for mode, time, distance, cost, color in results:
                 st.markdown(f"### 🚀 {mode}")
                 st.write(f"**Time:** {time:.1f} minutes")
-                if distance is not None:
-                    st.write(f"**Distance:** {distance:.2f} miles")
-                label = "Approx. Gas Cost"
-                st.write(f"**{label}:** ${cost:.2f}")
+                st.write(f"**Distance:** {distance:.2f} miles")
+                st.write(f"**Approx. Gas Cost:** ${cost:.2f}")
+                st.write(f"**Traffic Condition:** `{color.upper()}`")
 
             st.markdown("### 🗺 Route Maps")
             cols = st.columns(2 if (tolled_route and nontolled_route) else 1)
@@ -280,7 +259,7 @@ with main_col:
                     st.markdown("#### Drive (with tolls)")
                     map_tolled = show_map_with_route(
                         origin_coords, dest_coords,
-                        tolled_route["polyline"], tolled_route["steps"], "With Tolls"
+                        tolled_route["polyline"], tolled_route["steps"], "With Tolls", color=tolled_route["traffic_color"]
                     )
                     st_folium(map_tolled, width=700, height=400)
 
@@ -289,7 +268,7 @@ with main_col:
                     st.markdown("#### Drive (no tolls)")
                     map_nontolled = show_map_with_route(
                         origin_coords, dest_coords,
-                        nontolled_route["polyline"], nontolled_route["steps"], "No Tolls"
+                        nontolled_route["polyline"], nontolled_route["steps"], "No Tolls", color=nontolled_route["traffic_color"]
                     )
                     st_folium(map_nontolled, width=700, height=400)
 
