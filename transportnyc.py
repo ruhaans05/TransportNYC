@@ -140,8 +140,9 @@ with main_col:
 
     def get_place_suggestions(query):
         try:
+            time.sleep(1.2)
             res = requests.get("https://us1.locationiq.com/v1/search.php", params={
-                "key": LOCATIONIQ_KEY,
+                "key": st.secrets["LOCATIONIQ_KEY"],
                 "q": query,
                 "format": "json",
                 "limit": 5
@@ -149,9 +150,22 @@ with main_col:
             res.raise_for_status()
             raw = res.json()
             return [{"label": i["display_name"], "value": (float(i["lat"]), float(i["lon"]))} for i in raw]
-        except Exception as e:
-            st.error(f"Geocoding failed: {e}")
-            return []
+        except:
+            # fallback to public Nominatim
+            try:
+                res2 = requests.get("https://nominatim.openstreetmap.org/search", params={
+                    "q": query,
+                    "format": "json",
+                    "addressdetails": 1,
+                    "limit": 5
+                }, headers={"User-Agent": "TransportNYC-App"})
+                res2.raise_for_status()
+                raw2 = res2.json()
+                return [{"label": i["display_name"], "value": (float(i["lat"]), float(i["lon"]))} for i in raw2]
+            except Exception as e:
+                st.error(f"Geocoding failed on fallback too: {e}")
+                return []
+
 
 
 
