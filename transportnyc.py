@@ -80,23 +80,38 @@ with st.sidebar:
 if "username" in st.session_state:
     with st.sidebar:
         st.header("💬 Chat")
-        st.write("Public or private messages")
-        chat_mode = st.radio("Mode", ["Global", "Private"])
+        st.write("Type a public message or tag a user with `@username` for a private message.")
         message = st.text_input("Message")
+
         if st.button("Send") and message.strip():
+            private_to = None
+            if message.strip().startswith("@"):
+                parts = message.strip().split(" ", 1)
+                if len(parts) > 1:
+                    mentioned = parts[0][1:]
+                    if any(u["username"] == mentioned for u in users):
+                        private_to = mentioned
+
             chat_entry = {
                 "timestamp": datetime.now().isoformat(),
                 "sender": st.session_state.username,
-                "mode": chat_mode,
+                "recipient": private_to,
                 "message": message.strip()
             }
             chat_log.append(chat_entry)
             save_json(CHAT_FILE, chat_log)
+
         st.write("### 📜 Recent Messages:")
-        for c in reversed(chat_log[-10:]):
-            if c.get("mode") == "Global" or (c.get("mode") == "Private" and c.get("sender") == st.session_state.username):
+        for c in reversed(chat_log[-20:]):
+            is_global = c.get("recipient") is None
+            is_private_to_me = c.get("recipient") == st.session_state.username
+            is_sent_by_me = c.get("sender") == st.session_state.username
+
+            if is_global or is_private_to_me or is_sent_by_me:
                 ts = datetime.fromisoformat(c["timestamp"]).strftime("%Y-%m-%d %H:%M")
-                st.write(f"`{ts}` **{c['sender']}**: {c['message']}")
+                prefix = "🔒 " if c.get("recipient") else ""
+                st.write(f"`{ts}` {prefix}**{c['sender']}**: {c['message']}")
+
 
 
 
