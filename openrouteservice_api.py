@@ -4,7 +4,7 @@ import polyline
 import requests
 import streamlit as st
 
-ORS_API_KEY = st.secrets["ORS_API_KEY"]
+ORS_API_KEY = os.getenv("ORS_API_KEY")
 client = openrouteservice.Client(key=ORS_API_KEY)
 
 def get_driving_route(origin_coords, dest_coords, avoid_tolls=False):
