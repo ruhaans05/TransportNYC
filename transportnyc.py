@@ -139,11 +139,20 @@ with main_col:
     def get_place_suggestions(query):
         try:
             res = requests.get("https://nominatim.openstreetmap.org/search", params={
-                "q": query, "format": "json", "addressdetails": 1, "limit": 5
+                "q": query,
+                "format": "json",
+                "addressdetails": 1,
+                "limit": 5
             }, headers={"User-Agent": "TransportNYC-App"})
-            return [{"label": i["display_name"], "value": (float(i["lat"]), float(i["lon"]))} for i in res.json()]
-        except:
+            res.raise_for_status()
+            raw = res.json()
+            if not raw:
+                return []
+            return [{"label": i["display_name"], "value": (float(i["lat"]), float(i["lon"]))} for i in raw]
+        except Exception as e:
+            st.error(f"API error. Our team is currently handling this. Try again later: {e}")
             return []
+
 
     def extract_highways_from_steps(steps):
         highways = []
@@ -196,16 +205,24 @@ with main_col:
         num_intervals = st.number_input("How many breaks do you want to take during the trip?", min_value=0, max_value=10, step=1)
 
         origin_coords, dest_coords = None, None
-
+        origin_opts, dest_opts = [], []
+        
         if origin_query and len(origin_query) >= 3:
             origin_opts = get_place_suggestions(origin_query)
             if origin_opts:
-                origin_coords = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")["value"]
-
+                selected_origin = st.selectbox("Select Start", origin_opts, format_func=lambda x: x["label"], key="origin_select")
+                origin_coords = selected_origin["value"]
+            else:
+                st.warning("No results found for origin.")
+        
         if destination_query and len(destination_query) >= 3:
             dest_opts = get_place_suggestions(destination_query)
             if dest_opts:
-                dest_coords = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")["value"]
+                selected_dest = st.selectbox("Select Destination", dest_opts, format_func=lambda x: x["label"], key="dest_select")
+                dest_coords = selected_dest["value"]
+            else:
+                st.warning("No results found for destination.")
+
 
         submit = st.form_submit_button("Find Routes")
 
