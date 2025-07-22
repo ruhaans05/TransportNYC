@@ -232,13 +232,13 @@ with main_col:
             nontolled_route = None
 
             if "Drive (with tolls)" in transport_modes:
-                tolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=False, use_live_traffic=use_live_traffic)
+                tolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=False, use_live_traffic=True)
                 if tolled_route:
                     gas_cost = estimate_gas_cost(tolled_route["distance_miles"], mpg_val)
                     results.append(("Drive (with tolls)", tolled_route["duration_mins"], tolled_route["distance_miles"], gas_cost, tolled_route["traffic_color"]))
 
             if "Drive (no tolls)" in transport_modes:
-                nontolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=True, use_live_traffic=use_live_traffic)
+                nontolled_route = get_driving_route(format_coords(origin_coords), format_coords(dest_coords), avoid_tolls=True, use_live_traffic=True)
                 if nontolled_route:
                     gas_cost = estimate_gas_cost(nontolled_route["distance_miles"], mpg_val)
                     results.append(("Drive (no tolls)", nontolled_route["duration_mins"], nontolled_route["distance_miles"], gas_cost, nontolled_route["traffic_color"]))
