@@ -265,10 +265,11 @@ with main_col:
     if st.session_state.run_triggered and st.session_state.results:
         for mode, time, distance, cost, color in st.session_state.results:
             st.markdown(f"### 🚀 {mode}")
-            st.write(f"**Time:** {time:.1f} minutes")
+            st.write(f"**Time:** {round(time / 60, 1):.1f} hours")
             st.write(f"**Distance:** {distance:.2f} miles")
             st.write(f"**Approx. Gas Cost:** ${cost:.2f}")
             st.write(f"**Traffic Condition:** `{color.upper()}`")
+
 
         st.markdown("### 🗺 Route Maps")
         cols = st.columns(2 if (st.session_state.tolled_route and st.session_state.nontolled_route) else 1)
