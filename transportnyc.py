@@ -129,6 +129,11 @@ st.set_page_config(page_title="TransportNYC", layout="centered")
 main_col, ai_col = st.columns([3, 1])
 
 with main_col:
+    from PIL import Image
+
+    logo = Image.open("router-logo.png")
+    st.image(logo, width=120)  # Small logo for mobile
+
     st.title("🚦 Router")
     st.subheader("Optimize your routes for cost, gas, and time")
 
