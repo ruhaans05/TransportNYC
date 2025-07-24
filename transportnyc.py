@@ -27,13 +27,14 @@ if os.path.exists(logo_path):
     st.markdown(
         f"""
         <div style="text-align: center; margin-bottom: -1.2rem;">
-            <img src="data:image/png;base64,{logo_base64}" width="130"/>
+            <img src="data:image/png;base64,{logo_base64}" width="170"/>
         </div>
         """,
         unsafe_allow_html=True
     )
 else:
-    st.warning("Logo not found: Make sure 'router-logo.png' is in the same folder.")
+    st.warning("Logo could not load. Continue scrolling though to use the app!")
+
 
 
 # ================= USER & CHAT SYSTEM ====================
