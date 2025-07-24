@@ -38,14 +38,16 @@ def get_driving_route(origin_coords, dest_coords, avoid_tolls=False):
 
 def haversine(coord1, coord2):
     R = 6371e3  # Earth radius in meters
-    lat1, lon1 = math.radians(coord1[0])
+    lat1 = math.radians(coord1[0])
     lon1 = math.radians(coord1[1])
-    lat2, lon2 = math.radians(coord2[0]), math.radians(coord2[1])
+    lat2 = math.radians(coord2[0])
+    lon2 = math.radians(coord2[1])
     dlat = lat2 - lat1
     dlon = lon2 - lon1
 
-    a = math.sin(dlat/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
 
 def get_interval_coords(polyline_str, num_intervals):
     coords = pl.decode(polyline_str)
