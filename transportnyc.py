@@ -373,4 +373,4 @@ with ai_col:
                     ai_reply = ask_hustlerai(ai_question, context)
                     st.success(f"**HustlerAI:** {ai_reply}")
     else:
-        st.info("Login to use RouterAI.")
+        st.info("Hit the top left button to use RouterAI and GlobalChat.")
