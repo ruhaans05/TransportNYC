@@ -4,6 +4,7 @@ import polyline
 import requests
 import os
 import streamlit as st
+import math
 
 ORS_API_KEY = os.getenv("ORS_API_KEY")
 client = openrouteservice.Client(key=ORS_API_KEY)
@@ -35,11 +36,41 @@ def get_driving_route(origin_coords, dest_coords, avoid_tolls=False):
         "traffic_color": "gray"
     }
 
+
+def haversine(coord1, coord2):
+    R = 6371e3  # Earth radius in meters
+    lat1, lon1 = math.radians(coord1[0]), math.radians(coord1[1])
+    lat2, lon2 = math.radians(coord2[0]), math.radians(coord2[1])
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+
+    a = math.sin(dlat/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
 def get_interval_coords(polyline_str, num_intervals):
-    coords = polyline.decode(polyline_str)
-    total_len = len(coords)
-    interval_len = total_len // (num_intervals + 1)
-    return [coords[i * interval_len] for i in range(1, num_intervals + 1)]
+    coords = pl.decode(polyline_str)
+    total_dist = 0
+    dists = [0]
+
+    # Compute cumulative distances
+    for i in range(1, len(coords)):
+        dist = haversine(coords[i - 1], coords[i])
+        total_dist += dist
+        dists.append(total_dist)
+
+    # Target distance spacing
+    step_dist = total_dist / (num_intervals + 1)
+    result = []
+    next_target = step_dist
+    j = 1
+
+    for i in range(1, len(dists)):
+        while j <= num_intervals and dists[i] >= next_target:
+            result.append(coords[i])
+            j += 1
+            next_target = step_dist * j
+
+    return result
+
 
 def search_nearby_pois(lat, lon, kind, radius=5000):
     keyword_map = {
