@@ -132,7 +132,7 @@ with main_col:
     from PIL import Image
 
     logo = Image.open("router-logo.png")
-    st.image(logo, width=120)  # Small logo for mobile
+    st.image(logo, width=170)  # Small logo for mobile
 
     st.title("🚦 Router")
     st.subheader("Optimize your routes for cost, gas, and time")
