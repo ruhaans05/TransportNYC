@@ -371,6 +371,6 @@ with ai_col:
             if ai_question.strip():
                 with st.spinner("RouterAI is thinking..."):
                     ai_reply = ask_hustlerai(ai_question, context)
-                    st.success(f"**HustlerAI:** {ai_reply}")
+                    st.success(f"**RouterAI:** {ai_reply}")
     else:
         st.info("Hit the top left button to use RouterAI and GlobalChat.")
