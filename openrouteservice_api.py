@@ -73,22 +73,26 @@ def get_interval_coords(polyline_str, num_intervals):
     return result
 
 
-def search_nearby_pois(lat, lon, kind, radius=5000):
+def search_nearby_pois(lat, lon, kind, delta=0.1):
     keyword_map = {
         "gas": "gas station",
         "food": "restaurant",
         "hotel": "hotel"
     }
     query = keyword_map.get(kind.lower(), kind)
+
+    viewbox = f"{lon - delta},{lat - delta},{lon + delta},{lat + delta}"
+
     url = "https://nominatim.openstreetmap.org/search"
     params = {
         "q": query,
         "format": "json",
         "limit": 3,
-        "lat": lat,
-        "lon": lon,
-        "radius": radius
+        "viewbox": viewbox,
+        "bounded": 1
     }
     headers = {"User-Agent": "TransportNYC-App"}
+
     res = requests.get(url, params=params, headers=headers)
     return res.json() if res.status_code == 200 else []
+
