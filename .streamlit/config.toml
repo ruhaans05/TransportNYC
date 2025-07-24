@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#08C0FF"  # Light blue
+backgroundColor = "#0E1117"  # Deep black background
+secondaryBackgroundColor = "#262730"  # Dark gray for sidebar/form areas
+textColor = "#FAFAFA"  # Near-white text
+font = "sans serif"
