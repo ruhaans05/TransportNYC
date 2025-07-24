@@ -10,6 +10,32 @@ import polyline as pl
 import time
 from openrouteservice_api import get_driving_route, get_interval_coords, search_nearby_pois
 
+from PIL import Image
+import base64
+from io import BytesIO
+
+def get_image_base64(image_path):
+    img = Image.open(image_path)
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
+# Display centered logo
+logo_path = "router-logo.png"
+if os.path.exists(logo_path):
+    logo_base64 = get_image_base64(logo_path)
+    st.markdown(
+        f"""
+        <div style="text-align: center; margin-bottom: -1.2rem;">
+            <img src="data:image/png;base64,{logo_base64}" width="130"/>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+else:
+    st.warning("Logo not found: Make sure 'router-logo.png' is in the same folder.")
+
+
 # ================= USER & CHAT SYSTEM ====================
 USERS_FILE = "users.json"
 CHAT_FILE = "chat.json"
