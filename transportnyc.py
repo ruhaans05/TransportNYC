@@ -14,6 +14,10 @@ from PIL import Image
 import base64
 from io import BytesIO
 
+from db import init_db, create_user, get_user, increment_count
+init_db()
+
+
 def get_image_base64(image_path):
     img = Image.open(image_path)
     buffered = BytesIO()
