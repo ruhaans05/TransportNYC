@@ -257,7 +257,7 @@ with ai_col:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 
     def ask_hustlerai(question, context=None):
-        system = "You are HustlerAI, a friendly and knowledgeable NYC transportation assistant..."
+        system = "You are RouterAI, a friendly and knowledgeable transportation assistant, especially on specific routes and the weather/traffic conditions along them and what food, gas, and lodging options there are. You also know what routes are scenic and not...."
         if context:
             system += f" Context: {context}"
         try:
