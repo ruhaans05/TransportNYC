@@ -13,6 +13,8 @@ import base64
 from io import BytesIO
 from openrouteservice_api import get_driving_route, get_interval_coords, search_nearby_pois
 from db import init_db, create_user, get_user, increment_count
+from weather_agent import extract_route_coords, get_weather_for_coords
+
 
 init_db()
 
@@ -236,6 +238,28 @@ with main_col:
                 st.markdown("#### Drive (no tolls)")
                 m2 = show_map_with_route(st.session_state.origin_coords, st.session_state.dest_coords, st.session_state.nontolled_route["polyline"], st.session_state.nontolled_route["steps"], "No Tolls", st.session_state.nontolled_route["traffic_color"])
                 st_folium(m2, width=700, height=400)
+        # Weather Along Route (displayed before intervals)
+        route_used = st.session_state.nontolled_route or st.session_state.tolled_route
+        if route_used:
+            coords = extract_route_coords(route_used["polyline"])
+            weather_info = get_weather_for_coords(coords)
+        
+            st.markdown("### ☁️ Live Weather Along Route")
+            for i, w in enumerate(weather_info):
+                if "error" in w:
+                    st.warning(f"Weather at point {i+1} (lat {w['lat']}, lon {w['lon']}) failed: {w['error']}")
+                else:
+                    st.markdown(f"""
+                    **Point {i+1}:**  
+                    📍 Location: ({round(w['lat'], 3)}, {round(w['lon'], 3)})  
+                    🌡 Temperature: **{w['temp_c']}°C**  
+                    🕓 Time: {w['timestamp']}  
+                    """)
+            from weather_agent import show_weather_along_route
+            m_weather = show_weather_along_route(coords, weather_info)
+            st_folium(m_weather, width=700, height=450)
+
+
         if st.session_state.num_intervals > 0:
             route_used = st.session_state.nontolled_route or st.session_state.tolled_route
             interval_coords = get_interval_coords(route_used["polyline"], st.session_state.num_intervals)
