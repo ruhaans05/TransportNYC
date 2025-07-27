@@ -37,7 +37,7 @@ if os.path.exists(logo_path):
 else:
     st.warning("Logo could not load. Continue scrolling though to use the app!")
 
-# Chat history (still using JSON)
+# Chat history
 CHAT_FILE = "chat.json"
 def load_json(filename, default):
     if os.path.exists(filename):
@@ -49,7 +49,6 @@ def save_json(filename, obj):
         json.dump(obj, f, indent=2)
 chat_log = load_json(CHAT_FILE, [])
 
-# Layout
 st.set_page_config(page_title="TransportNYC", layout="centered")
 main_col, ai_col = st.columns([3, 1])
 
@@ -153,7 +152,22 @@ with main_col:
             return []
 
     def extract_highways_from_steps(steps):
-        return list({step.get("instruction", "") for step in steps if any(k in step.get("instruction", "") for k in ["I-", "US-", "Route", "Hwy", "Highway", "Turnpike", "Freeway", "Parkway"])})[:6]
+        highways = set()
+        for step in steps:
+            instruction = step.get("instruction", "")
+            tokens = instruction.split()
+            for token in tokens:
+                if any(prefix in token for prefix in ["I-", "US-", "Route", "Hwy", "Highway", "Turnpike", "Freeway", "Parkway"]):
+                    highways.add(token.strip(",."))
+        return sorted(highways)
+
+    def generate_route_guide(route_obj, label):
+        steps = route_obj.get("steps", [])
+        highways = extract_highways_from_steps(steps)
+        if not highways:
+            return f"{label} route uses local roads and does not pass through major highways."
+        highway_list = ", ".join(highways[:-1]) + f", and {highways[-1]}" if len(highways) > 1 else highways[0]
+        return f"The {label} route takes you through: {highway_list}."
 
     def show_map_with_route(start_coords, end_coords, polyline_str, steps, label, color="blue"):
         m = folium.Map()
@@ -161,12 +175,6 @@ with main_col:
         folium.Marker(start_coords, tooltip="Start", icon=folium.Icon(color="green")).add_to(m)
         folium.Marker(end_coords, tooltip="End", icon=folium.Icon(color="red")).add_to(m)
         folium.PolyLine(pl.decode(polyline_str), color=color, weight=5, opacity=0.7).add_to(m)
-        highways = extract_highways_from_steps(steps)
-        if highways:
-            folium.Marker(
-                location=start_coords,
-                icon=folium.DivIcon(html=f'<div style="font-size: 10pt">{label} uses:<br>' + "<br>".join(highways) + '</div>')
-            ).add_to(m)
         return m
 
     for key in ["origin_coords", "dest_coords", "run_triggered", "tolled_route", "nontolled_route", "results"]:
@@ -236,6 +244,17 @@ with main_col:
                 st.markdown("#### Drive (no tolls)")
                 m2 = show_map_with_route(st.session_state.origin_coords, st.session_state.dest_coords, st.session_state.nontolled_route["polyline"], st.session_state.nontolled_route["steps"], "No Tolls", st.session_state.nontolled_route["traffic_color"])
                 st_folium(m2, width=700, height=400)
+
+        # 🧭 Route Guide
+        st.markdown("### 🧭 Route Guide")
+        if st.session_state.tolled_route:
+            guide = generate_route_guide(st.session_state.tolled_route, "Toll")
+            st.markdown(f"**Toll Route:** {guide}")
+        if st.session_state.nontolled_route:
+            guide = generate_route_guide(st.session_state.nontolled_route, "No-Toll")
+            st.markdown(f"**No-Toll Route:** {guide}")
+
+        # 🛑 Suggested Stops
         if st.session_state.num_intervals > 0:
             route_used = st.session_state.nontolled_route or st.session_state.tolled_route
             interval_coords = get_interval_coords(route_used["polyline"], st.session_state.num_intervals)
@@ -250,7 +269,7 @@ with main_col:
                 if hotel: st.markdown(f"- 🛏 Hotel: **{hotel[0]['display_name']}**")
                 st.markdown("---")
 
-# AI Column
+# AI Companion
 with ai_col:
     st.markdown("## 🤖 RouterAI")
     import openai
